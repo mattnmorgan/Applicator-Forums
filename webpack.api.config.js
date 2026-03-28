@@ -95,6 +95,7 @@ module.exports = {
     ioredis: "commonjs2 ioredis",
     uuid: "commonjs2 uuid",
     bcryptjs: "commonjs2 bcryptjs",
+    sharp: "commonjs2 sharp",
   },
   mode: "production",
 };

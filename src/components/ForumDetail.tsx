@@ -1,0 +1,555 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
+import { ButtonIcon, Icon } from "@applicator/sdk/components";
+import styles from "@/src/apps/Forums.module.css";
+import ForumSettingsModal from "./ForumSettingsModal";
+import ShareModal from "./ShareModal";
+import TopicEditModal from "./TopicEditModal";
+
+interface TopicSummary {
+  id: string;
+  name: string;
+  description: string;
+  hasIcon: boolean;
+  sectionId: string | null;
+  order: number;
+  locked: boolean;
+  lastPostDate: number | null;
+  lastPostUserName: string | null;
+}
+
+interface SectionSummary {
+  id: string;
+  name: string;
+  order: number;
+}
+
+interface ForumData {
+  id: string;
+  name: string;
+  description: string;
+  ownerId: string;
+  hasIcon: boolean;
+  access: string;
+  currentUserId: string;
+  sections: SectionSummary[];
+  topics: TopicSummary[];
+}
+
+interface Props {
+  forumId: string;
+  onBack: () => void;
+  onNavigateToTopic: (topicId: string) => void;
+}
+
+export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Props) {
+  const [forum, setForum] = useState<ForumData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editingSectionName, setEditingSectionName] = useState("");
+
+  // Drag state for sections
+  const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
+  const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
+
+  // Drag state for topics
+  const [draggingTopicId, setDraggingTopicId] = useState<string | null>(null);
+  const [dragOverTopicId, setDragOverTopicId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/forums/forums/${forumId}`);
+      if (res.ok) setForum(await res.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [forumId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const canModerate = forum?.access === "owner" || forum?.access === "moderator";
+
+  // ── Section handlers ────────────────────────────────────
+  const handleAddSection = async () => {
+    const res = await fetch(`/api/forums/forums/${forumId}/sections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "New Section" }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setForum((prev) => prev ? { ...prev, sections: [...prev.sections, { id: data.id, name: data.name, order: data.order }].sort((a, b) => a.order - b.order) } : prev);
+    }
+  };
+
+  const handleSectionNameSave = async (sectionId: string, name: string) => {
+    if (!name.trim()) return;
+    const res = await fetch(`/api/forums/sections/${sectionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    if (res.ok) {
+      setForum((prev) => prev ? { ...prev, sections: prev.sections.map((s) => s.id === sectionId ? { ...s, name: name.trim() } : s) } : prev);
+    }
+    setEditingSectionId(null);
+  };
+
+  const handleDeleteSection = async (sectionId: string) => {
+    const res = await fetch(`/api/forums/sections/${sectionId}`, { method: "DELETE" });
+    if (res.ok) {
+      setForum((prev) => {
+        if (!prev) return prev;
+        // Move topics from this section to unsectioned
+        const updatedTopics = prev.topics.map((t) =>
+          t.sectionId === sectionId ? { ...t, sectionId: null } : t,
+        );
+        return { ...prev, sections: prev.sections.filter((s) => s.id !== sectionId), topics: updatedTopics };
+      });
+    }
+  };
+
+  // ── Topic handlers ──────────────────────────────────────
+  const handleAddTopic = async (sectionId: string | null) => {
+    const res = await fetch(`/api/forums/forums/${forumId}/topics`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "New Topic", sectionId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const newTopic: TopicSummary = {
+        id: data.id,
+        name: data.name,
+        description: data.description || "",
+        hasIcon: false,
+        sectionId: data.sectionId || null,
+        order: data.order ?? 0,
+        locked: false,
+        lastPostDate: null,
+        lastPostUserName: null,
+      };
+      setForum((prev) => prev ? { ...prev, topics: [...prev.topics, newTopic] } : prev);
+    }
+  };
+
+  const handleTopicUpdated = (updated: TopicSummary) => {
+    setForum((prev) => prev ? { ...prev, topics: prev.topics.map((t) => t.id === updated.id ? updated : t) } : prev);
+    setEditingTopicId(null);
+  };
+
+  const handleDeleteTopic = async (topicId: string) => {
+    const res = await fetch(`/api/forums/topics/${topicId}`, { method: "DELETE" });
+    if (res.ok) {
+      setForum((prev) => prev ? { ...prev, topics: prev.topics.filter((t) => t.id !== topicId) } : prev);
+    }
+  };
+
+  // ── Section DnD ─────────────────────────────────────────
+  const handleSectionDragStart = (e: React.DragEvent, sectionId: string) => {
+    e.stopPropagation();
+    setDraggingSectionId(sectionId);
+  };
+
+  const handleSectionDragOver = (e: React.DragEvent, sectionId: string) => {
+    e.preventDefault();
+    setDragOverSectionId(sectionId);
+  };
+
+  const handleSectionDrop = async (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggingSectionId || draggingSectionId === targetId || !forum) {
+      setDraggingSectionId(null); setDragOverSectionId(null); return;
+    }
+    const sorted = [...forum.sections].sort((a, b) => a.order - b.order);
+    const fromIdx = sorted.findIndex((s) => s.id === draggingSectionId);
+    const toIdx = sorted.findIndex((s) => s.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) { setDraggingSectionId(null); setDragOverSectionId(null); return; }
+    const newList = [...sorted];
+    const [moved] = newList.splice(fromIdx, 1);
+    newList.splice(toIdx, 0, moved);
+    const updated = newList.map((s, i) => ({ ...s, order: i }));
+    setForum((prev) => prev ? { ...prev, sections: updated } : prev);
+    setDraggingSectionId(null); setDragOverSectionId(null);
+    try {
+      await fetch(`/api/forums/forums/${forumId}/sections/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sections: updated.map((s) => ({ id: s.id, order: s.order })) }),
+      });
+    } catch {}
+  };
+
+  // ── Topic DnD ───────────────────────────────────────────
+  const handleTopicDragStart = (e: React.DragEvent, topicId: string) => {
+    e.stopPropagation();
+    setDraggingTopicId(topicId);
+  };
+
+  const handleTopicDragOver = (e: React.DragEvent, topicId: string) => {
+    e.preventDefault();
+    setDragOverTopicId(topicId);
+  };
+
+  const handleTopicDrop = async (e: React.DragEvent, targetTopicId: string, targetSectionId: string | null) => {
+    e.preventDefault();
+    if (!draggingTopicId || draggingTopicId === targetTopicId || !forum) {
+      setDraggingTopicId(null); setDragOverTopicId(null); return;
+    }
+    const draggingTopic = forum.topics.find((t) => t.id === draggingTopicId);
+    if (!draggingTopic) { setDraggingTopicId(null); setDragOverTopicId(null); return; }
+
+    // If dropping into a different section, update sectionId
+    const newSectionId = targetSectionId;
+
+    // Reorder within the target section
+    const sectionTopics = forum.topics
+      .filter((t) => t.sectionId === newSectionId)
+      .sort((a, b) => a.order - b.order);
+
+    const withoutDragging = sectionTopics.filter((t) => t.id !== draggingTopicId);
+    const toIdx = withoutDragging.findIndex((t) => t.id === targetTopicId);
+    const insertIdx = toIdx === -1 ? withoutDragging.length : toIdx;
+    withoutDragging.splice(insertIdx, 0, { ...draggingTopic, sectionId: newSectionId });
+    const reordered = withoutDragging.map((t, i) => ({ ...t, order: i }));
+
+    setForum((prev) => {
+      if (!prev) return prev;
+      const otherTopics = prev.topics.filter((t) => t.id !== draggingTopicId && t.sectionId !== newSectionId);
+      return { ...prev, topics: [...otherTopics, ...reordered] };
+    });
+    setDraggingTopicId(null); setDragOverTopicId(null);
+
+    try {
+      await fetch(`/api/forums/topics/${draggingTopicId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sectionId: newSectionId, order: reordered.find((t) => t.id === draggingTopicId)?.order }),
+      });
+    } catch {}
+  };
+
+  if (loading) return <div className={styles.loading}>Loading forum…</div>;
+  if (!forum) return <div className={styles.loading}>Forum not found.</div>;
+
+  const sortedSections = [...forum.sections].sort((a, b) => a.order - b.order);
+  const editingTopic = editingTopicId ? forum.topics.find((t) => t.id === editingTopicId) : null;
+
+  return (
+    <>
+      {/* Header */}
+      <div className={styles.header}>
+        <button className={styles.backBtn} onClick={onBack}>
+          <Icon name="chevron-left" size={14} /> Back
+        </button>
+
+        {forum.hasIcon ? (
+          <img src={`/api/forums/icons/forums/${forum.id}`} alt="" className={styles.headerIcon} />
+        ) : (
+          <div className={styles.headerIconPlaceholder}><Icon name="users" size={14} /></div>
+        )}
+
+        <span className={styles.headerTitle}>{forum.name}</span>
+
+        <div className={styles.headerActions}>
+          {canModerate && (
+            <ButtonIcon
+              name="edit"
+              iconSize={14}
+              label={editMode ? "Exit edit mode" : "Edit forum"}
+              onClick={() => setEditMode((v) => !v)}
+              active={editMode}
+              subvariant="info"
+              placement="bottom"
+            />
+          )}
+          {canModerate && (
+            <ButtonIcon
+              name="users"
+              iconSize={14}
+              label="Manage sharing"
+              onClick={() => setShowShare(true)}
+              placement="bottom"
+            />
+          )}
+          {canModerate && (
+            <ButtonIcon
+              name="settings"
+              iconSize={14}
+              label="Forum settings"
+              onClick={() => setShowSettings(true)}
+              placement="bottom"
+            />
+          )}
+        </div>
+      </div>
+
+      {editMode && (
+        <div className={styles.editModeBar}>
+          <Icon name="edit" size={12} />
+          Edit mode — drag to reorder, click section names to rename
+        </div>
+      )}
+
+      {/* Body */}
+      <div className={styles.body}>
+        {sortedSections.map((section) => {
+          const sectionTopics = forum.topics
+            .filter((t) => t.sectionId === section.id)
+            .sort((a, b) => a.order - b.order);
+
+          return (
+            <div
+              key={section.id}
+              className={`${styles.sectionGroup} ${editMode && dragOverSectionId === section.id ? styles.sectionDragOver : ""}`}
+              draggable={editMode}
+              onDragStart={editMode ? (e) => handleSectionDragStart(e, section.id) : undefined}
+              onDragOver={editMode ? (e) => handleSectionDragOver(e, section.id) : undefined}
+              onDrop={editMode ? (e) => handleSectionDrop(e, section.id) : undefined}
+              onDragEnd={() => { setDraggingSectionId(null); setDragOverSectionId(null); }}
+            >
+              <div className={styles.sectionGroupHeader}>
+                {editMode && <span className={styles.dragHandle}><Icon name="drag" size={14} /></span>}
+
+                {editMode && editingSectionId === section.id ? (
+                  <input
+                    className={styles.sectionNameInput}
+                    value={editingSectionName}
+                    onChange={(e) => setEditingSectionName(e.target.value)}
+                    onBlur={() => handleSectionNameSave(section.id, editingSectionName)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSectionNameSave(section.id, editingSectionName);
+                      if (e.key === "Escape") setEditingSectionId(null);
+                    }}
+                    autoFocus
+                  />
+                ) : (
+                  <span
+                    className={styles.sectionGroupTitle}
+                    onClick={editMode ? () => { setEditingSectionId(section.id); setEditingSectionName(section.name); } : undefined}
+                    style={editMode ? { cursor: "text" } : undefined}
+                  >
+                    {section.name}
+                  </span>
+                )}
+
+                {editMode && (
+                  <ButtonIcon
+                    name="trash"
+                    iconSize={12}
+                    label="Delete section"
+                    onClick={() => handleDeleteSection(section.id)}
+                    subvariant="danger"
+                    size="sm"
+                    placement="bottom"
+                  />
+                )}
+              </div>
+
+              {sectionTopics.map((topic) => (
+                <TopicRowItem
+                  key={topic.id}
+                  topic={topic}
+                  editMode={editMode}
+                  isDragging={draggingTopicId === topic.id}
+                  isDragOver={dragOverTopicId === topic.id}
+                  onClick={() => !editMode && onNavigateToTopic(topic.id)}
+                  onDragStart={(e) => handleTopicDragStart(e, topic.id)}
+                  onDragOver={(e) => handleTopicDragOver(e, topic.id)}
+                  onDrop={(e) => handleTopicDrop(e, topic.id, topic.sectionId)}
+                  onDragEnd={() => { setDraggingTopicId(null); setDragOverTopicId(null); }}
+                  onEdit={() => setEditingTopicId(topic.id)}
+                  onDelete={() => handleDeleteTopic(topic.id)}
+                />
+              ))}
+
+              {editMode && (
+                <button className={styles.addTopicBtn} onClick={() => handleAddTopic(section.id)}>
+                  <Icon name="plus" size={12} /> Add Topic
+                </button>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Unsectioned topics */}
+        {(() => {
+          const unsectioned = forum.topics
+            .filter((t) => !t.sectionId)
+            .sort((a, b) => a.order - b.order);
+
+          if (unsectioned.length === 0 && !editMode) return null;
+
+          return (
+            <div className={styles.sectionGroup}>
+              {forum.sections.length > 0 && (
+                <div className={styles.sectionGroupHeader}>
+                  <span className={styles.sectionGroupTitle} style={{ color: "#475569" }}>
+                    Other
+                  </span>
+                </div>
+              )}
+              {unsectioned.map((topic) => (
+                <TopicRowItem
+                  key={topic.id}
+                  topic={topic}
+                  editMode={editMode}
+                  isDragging={draggingTopicId === topic.id}
+                  isDragOver={dragOverTopicId === topic.id}
+                  onClick={() => !editMode && onNavigateToTopic(topic.id)}
+                  onDragStart={(e) => handleTopicDragStart(e, topic.id)}
+                  onDragOver={(e) => handleTopicDragOver(e, topic.id)}
+                  onDrop={(e) => handleTopicDrop(e, topic.id, null)}
+                  onDragEnd={() => { setDraggingTopicId(null); setDragOverTopicId(null); }}
+                  onEdit={() => setEditingTopicId(topic.id)}
+                  onDelete={() => handleDeleteTopic(topic.id)}
+                />
+              ))}
+              {editMode && (
+                <button className={styles.addTopicBtn} onClick={() => handleAddTopic(null)}>
+                  <Icon name="plus" size={12} /> Add Topic
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
+        {forum.topics.length === 0 && !editMode && (
+          <div className={styles.emptyState}>
+            <span className={styles.emptyStateTitle}>No topics yet</span>
+            {canModerate && (
+              <span className={styles.emptyStateDesc}>
+                Enter edit mode to add sections and topics.
+              </span>
+            )}
+          </div>
+        )}
+
+        {editMode && (
+          <button className={styles.addSectionBtn} onClick={handleAddSection}>
+            <Icon name="plus" size={14} /> Add Section
+          </button>
+        )}
+      </div>
+
+      {showSettings && forum && (
+        <ForumSettingsModal
+          forum={forum}
+          onClose={() => setShowSettings(false)}
+          onUpdated={(updated) => setForum((prev) => prev ? { ...prev, ...updated } : prev)}
+          onDeleted={onBack}
+        />
+      )}
+
+      {showShare && (
+        <ShareModal
+          forumId={forumId}
+          forumName={forum.name}
+          onClose={() => setShowShare(false)}
+        />
+      )}
+
+      {editingTopic && (
+        <TopicEditModal
+          topic={editingTopic}
+          onClose={() => setEditingTopicId(null)}
+          onUpdated={handleTopicUpdated}
+        />
+      )}
+    </>
+  );
+}
+
+function TopicRowItem({
+  topic,
+  editMode,
+  isDragging,
+  isDragOver,
+  onClick,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  onEdit,
+  onDelete,
+}: {
+  topic: TopicSummary;
+  editMode: boolean;
+  isDragging: boolean;
+  isDragOver: boolean;
+  onClick: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const cls = [
+    styles.topicRow,
+    isDragging ? styles.topicRowDragging : "",
+    isDragOver ? styles.topicRowDragOver : "",
+  ].filter(Boolean).join(" ");
+
+  return (
+    <div
+      className={cls}
+      draggable={editMode}
+      onDragStart={editMode ? onDragStart : undefined}
+      onDragOver={editMode ? onDragOver : undefined}
+      onDrop={editMode ? onDrop : undefined}
+      onDragEnd={editMode ? onDragEnd : undefined}
+      onClick={onClick}
+    >
+      {editMode && <span className={styles.dragHandle}><Icon name="drag" size={14} /></span>}
+
+      {topic.hasIcon ? (
+        <img src={`/api/forums/icons/topics/${topic.id}`} alt="" className={styles.topicRowIcon} />
+      ) : (
+        <div className={styles.topicRowIconPlaceholder}><Icon name="list-view" size={18} /></div>
+      )}
+
+      <div className={styles.topicRowContent}>
+        <div className={styles.topicRowName}>
+          {topic.name}
+          {topic.locked && (
+            <span className={styles.lockedBadge}><Icon name="square-stop" size={10} /> Locked</span>
+          )}
+        </div>
+        {topic.description && (
+          <div className={styles.topicRowDesc}>{topic.description}</div>
+        )}
+      </div>
+
+      {!editMode && (
+        <div className={styles.topicRowMeta}>
+          {topic.lastPostDate ? (
+            <>
+              <div className={styles.topicRowMetaLine}>
+                {new Date(topic.lastPostDate).toLocaleDateString()}
+              </div>
+              {topic.lastPostUserName && (
+                <div className={styles.topicRowMetaLine}>by {topic.lastPostUserName}</div>
+              )}
+            </>
+          ) : (
+            <div className={styles.topicRowMetaLine} style={{ color: "#334155" }}>No posts</div>
+          )}
+        </div>
+      )}
+
+      {editMode && (
+        <div className={styles.topicRowEditActions} onClick={(e) => e.stopPropagation()}>
+          <ButtonIcon name="edit" iconSize={12} label="Edit topic" onClick={onEdit} size="sm" placement="bottom" />
+          <ButtonIcon name="trash" iconSize={12} label="Delete topic" onClick={onDelete} subvariant="danger" size="sm" placement="bottom" />
+        </div>
+      )}
+    </div>
+  );
+}

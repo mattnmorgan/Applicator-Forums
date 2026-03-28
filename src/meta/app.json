@@ -1,33 +1,433 @@
 {
-  "id": "my-app",
-  "name": "My App",
+  "id": "forums",
+  "name": "Forums",
   "version": {
     "major": 1,
     "minor": 0,
     "dev": 0
   },
-  "author": "Your Name",
-  "contactEmail": "you@example.com",
-  "description": "Description of what your app does",
+  "author": "Matthew Morgan",
+  "contactEmail": "matthew@morgantech.info",
+  "description": "Discussion forums with sections, topics, threads, and rich text messages",
+  "requiredPermissions": [],
   "dependencies": {},
-  "tables": [],
-  "authorizations": [],
-  "authorities": [],
+  "tables": [
+    {
+      "name": "forum",
+      "description": "A top-level discussion forum",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Forum name"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "description": "Forum description"
+        },
+        {
+          "name": "ownerId",
+          "type": "relationship",
+          "relatedTo": "system:users",
+          "required": true,
+          "description": "Forum owner"
+        },
+        {
+          "name": "hasIcon",
+          "type": "boolean",
+          "description": "Whether the forum has a stored icon"
+        }
+      ]
+    },
+    {
+      "name": "section",
+      "description": "An ordered section grouping topics within a forum",
+      "fields": [
+        {
+          "name": "forumId",
+          "type": "relationship",
+          "relatedTo": "forum",
+          "required": true,
+          "description": "Parent forum"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Section name"
+        },
+        {
+          "name": "order",
+          "type": "number",
+          "required": true,
+          "description": "Display order within the forum"
+        }
+      ]
+    },
+    {
+      "name": "topic",
+      "description": "A topic board within a forum section",
+      "fields": [
+        {
+          "name": "forumId",
+          "type": "relationship",
+          "relatedTo": "forum",
+          "required": true,
+          "description": "Parent forum (denormalized)"
+        },
+        {
+          "name": "sectionId",
+          "type": "relationship",
+          "relatedTo": "section",
+          "description": "Parent section (null = unsectioned)"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Topic name"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "description": "Topic description"
+        },
+        {
+          "name": "hasIcon",
+          "type": "boolean",
+          "description": "Whether the topic has a stored icon"
+        },
+        {
+          "name": "order",
+          "type": "number",
+          "required": true,
+          "description": "Display order within section"
+        },
+        {
+          "name": "locked",
+          "type": "boolean",
+          "description": "Locked topics prevent new threads and posts"
+        },
+        {
+          "name": "lastPostDate",
+          "type": "datetime",
+          "description": "Date of the most recent post in this topic"
+        },
+        {
+          "name": "lastPostUserId",
+          "type": "relationship",
+          "relatedTo": "system:users",
+          "description": "User who made the most recent post"
+        }
+      ]
+    },
+    {
+      "name": "thread",
+      "description": "A discussion thread within a topic",
+      "fields": [
+        {
+          "name": "topicId",
+          "type": "relationship",
+          "relatedTo": "topic",
+          "required": true,
+          "description": "Parent topic"
+        },
+        {
+          "name": "forumId",
+          "type": "relationship",
+          "relatedTo": "forum",
+          "required": true,
+          "description": "Parent forum (denormalized)"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Thread title"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "description": "Thread description"
+        },
+        {
+          "name": "createdBy",
+          "type": "relationship",
+          "relatedTo": "system:users",
+          "required": true,
+          "description": "Thread creator"
+        },
+        {
+          "name": "pinned",
+          "type": "boolean",
+          "description": "Whether the thread is pinned to the top"
+        },
+        {
+          "name": "locked",
+          "type": "boolean",
+          "description": "Locked threads prevent new messages"
+        },
+        {
+          "name": "lastPostDate",
+          "type": "datetime",
+          "description": "Date of the most recent message"
+        },
+        {
+          "name": "lastPostUserId",
+          "type": "relationship",
+          "relatedTo": "system:users",
+          "description": "User who made the most recent post"
+        }
+      ]
+    },
+    {
+      "name": "message",
+      "description": "A rich-text message within a thread",
+      "fields": [
+        {
+          "name": "threadId",
+          "type": "relationship",
+          "relatedTo": "thread",
+          "required": true,
+          "description": "Parent thread"
+        },
+        {
+          "name": "forumId",
+          "type": "relationship",
+          "relatedTo": "forum",
+          "required": true,
+          "description": "Parent forum (denormalized)"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "description": "HTML rich text content"
+        },
+        {
+          "name": "authorId",
+          "type": "relationship",
+          "relatedTo": "system:users",
+          "required": true,
+          "description": "Message author"
+        },
+        {
+          "name": "edited",
+          "type": "boolean",
+          "description": "Whether the message was edited by its author"
+        },
+        {
+          "name": "editedAt",
+          "type": "datetime",
+          "description": "When the message was last edited"
+        },
+        {
+          "name": "removed",
+          "type": "boolean",
+          "description": "Whether the message was removed by a moderator"
+        }
+      ]
+    }
+  ],
+  "authorizations": [
+    {
+      "id": "create-forum",
+      "name": "Create Forum",
+      "description": "Can create new forums",
+      "target": "user"
+    },
+    {
+      "id": "forum-moderator",
+      "name": "Forum Moderator",
+      "description": "Moderator access to a specific forum",
+      "contextual": true,
+      "target": "user"
+    },
+    {
+      "id": "forum-member",
+      "name": "Forum Member",
+      "description": "Member access (view and post) to a specific forum",
+      "contextual": true,
+      "target": "user"
+    },
+    {
+      "id": "forum-viewer",
+      "name": "Forum Viewer",
+      "description": "View-only access to a specific forum",
+      "contextual": true,
+      "target": "user"
+    }
+  ],
+  "authorities": [
+    {
+      "id": "user",
+      "name": "User",
+      "authorizations": [
+        "forums:create-forum"
+      ]
+    }
+  ],
   "apiRoutes": [
-    { "path": "items", "method": "GET", "description": "List all items" },
-    { "path": "items", "method": "POST", "description": "Create a new item" },
-    { "path": "items/[item-id]", "method": "GET", "description": "Get an item by ID" },
-    { "path": "items/[item-id]", "method": "PATCH", "description": "Update an item" },
-    { "path": "items/[item-id]", "method": "DELETE", "description": "Delete an item" }
+    {
+      "path": "forums",
+      "method": "GET",
+      "description": "List forums"
+    },
+    {
+      "path": "forums",
+      "method": "POST",
+      "description": "Create a forum"
+    },
+    {
+      "path": "forums/[forum-id]",
+      "method": "GET",
+      "description": "Get a forum"
+    },
+    {
+      "path": "forums/[forum-id]",
+      "method": "PATCH",
+      "description": "Update a forum"
+    },
+    {
+      "path": "forums/[forum-id]",
+      "method": "DELETE",
+      "description": "Delete a forum"
+    },
+    {
+      "path": "forums/[forum-id]/icon",
+      "method": "POST",
+      "description": "Upload forum icon"
+    },
+    {
+      "path": "forums/[forum-id]/shares",
+      "method": "GET",
+      "description": "List shares"
+    },
+    {
+      "path": "forums/[forum-id]/shares",
+      "method": "POST",
+      "description": "Add a share"
+    },
+    {
+      "path": "forums/[forum-id]/shares/[share-id]",
+      "method": "PATCH",
+      "description": "Update share role"
+    },
+    {
+      "path": "forums/[forum-id]/shares/[share-id]",
+      "method": "DELETE",
+      "description": "Remove a share"
+    },
+    {
+      "path": "forums/[forum-id]/sections",
+      "method": "POST",
+      "description": "Create a section"
+    },
+    {
+      "path": "forums/[forum-id]/sections/reorder",
+      "method": "POST",
+      "description": "Reorder sections"
+    },
+    {
+      "path": "forums/[forum-id]/topics",
+      "method": "POST",
+      "description": "Create a topic"
+    },
+    {
+      "path": "icons/forums/[forum-id]",
+      "method": "GET",
+      "description": "Serve forum icon"
+    },
+    {
+      "path": "icons/topics/[topic-id]",
+      "method": "GET",
+      "description": "Serve topic icon"
+    },
+    {
+      "path": "sections/[section-id]",
+      "method": "PATCH",
+      "description": "Rename a section"
+    },
+    {
+      "path": "sections/[section-id]",
+      "method": "DELETE",
+      "description": "Delete a section"
+    },
+    {
+      "path": "topics/[topic-id]",
+      "method": "GET",
+      "description": "Get a topic"
+    },
+    {
+      "path": "topics/[topic-id]",
+      "method": "PATCH",
+      "description": "Update a topic"
+    },
+    {
+      "path": "topics/[topic-id]",
+      "method": "DELETE",
+      "description": "Delete a topic"
+    },
+    {
+      "path": "topics/[topic-id]/icon",
+      "method": "POST",
+      "description": "Upload topic icon"
+    },
+    {
+      "path": "topics/[topic-id]/threads",
+      "method": "GET",
+      "description": "List threads"
+    },
+    {
+      "path": "topics/[topic-id]/threads",
+      "method": "POST",
+      "description": "Create a thread"
+    },
+    {
+      "path": "threads/[thread-id]",
+      "method": "PATCH",
+      "description": "Update a thread"
+    },
+    {
+      "path": "threads/[thread-id]",
+      "method": "DELETE",
+      "description": "Delete a thread"
+    },
+    {
+      "path": "threads/[thread-id]/messages",
+      "method": "GET",
+      "description": "List messages"
+    },
+    {
+      "path": "threads/[thread-id]/messages",
+      "method": "POST",
+      "description": "Post a message"
+    },
+    {
+      "path": "messages/[message-id]",
+      "method": "PATCH",
+      "description": "Edit a message"
+    },
+    {
+      "path": "messages/[message-id]",
+      "method": "DELETE",
+      "description": "Remove a message"
+    },
+    {
+      "path": "users",
+      "method": "GET",
+      "description": "List active users"
+    }
   ],
   "agents": [],
   "applets": [
     {
       "id": "main",
-      "label": "My App",
-      "description": "Main application view",
+      "label": "Forums",
+      "description": "Discussion forums with sections, topics, and threaded messages",
       "target": "app",
-      "component": "App"
+      "component": "Forums"
     }
   ]
 }

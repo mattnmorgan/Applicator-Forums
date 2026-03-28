@@ -1,0 +1,147 @@
+import { NextRequest, NextResponse } from "next/server";
+import { ApiContext } from "@applicator/sdk/context";
+import { TopicRecord } from "@/src/types/TopicRecord";
+import { ThreadRecord } from "@/src/types/ThreadRecord";
+import { getForumAccess, canPost, canModerate } from "@/src/lib/forum-access";
+
+const PAGE_SIZE = 100;
+
+// GET /api/forums/topics/:topicId/threads — list threads (paginated, pinned first)
+export async function GET(
+  req: NextRequest,
+  context: ApiContext,
+  params: { topicId: string },
+) {
+  const { topicId } = params;
+  const topics = context.recordManager<TopicRecord>("forums", "topic");
+  const topic = await topics.readRecord(topicId);
+  if (!topic) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const access = await getForumAccess(context, topic.data.forumId);
+  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+
+  const { searchParams } = new URL(req.url);
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+  const offset = (page - 1) * PAGE_SIZE;
+
+  const threads = context.recordManager<ThreadRecord>("forums", "thread");
+  const userMgr = context.recordManager("system", "users");
+
+  // Get pinned threads (no pagination)
+  const pinnedResult = await threads.readRecords({
+    filters: [
+      { field: "topicId", operator: "=", value: topicId },
+      { field: "pinned", operator: "=", value: true },
+    ],
+  });
+
+  // Get unpinned threads (paginated, by lastPostDate DESC)
+  const unpinnedResult = await threads.readRecords({
+    filters: [
+      { field: "topicId", operator: "=", value: topicId },
+      { field: "pinned", operator: "!=", value: true },
+    ],
+    limit: PAGE_SIZE,
+    offset,
+  });
+
+  const enrichThread = async (t: { id: string; data: ThreadRecord; createdAt: number }) => {
+    const creator = await userMgr.readRecord(t.data.createdBy) as any;
+    let lastPostUserName: string | null = null;
+    if (t.data.lastPostUserId) {
+      const u = await userMgr.readRecord(t.data.lastPostUserId) as any;
+      lastPostUserName = u?.data.display_name || u?.data.username || null;
+    }
+    return {
+      id: t.id,
+      name: t.data.name,
+      description: t.data.description || "",
+      createdBy: t.data.createdBy,
+      createdByName: creator?.data.display_name || creator?.data.username || t.data.createdBy,
+      createdAt: t.createdAt,
+      pinned: !!t.data.pinned,
+      locked: !!t.data.locked,
+      lastPostDate: t.data.lastPostDate || null,
+      lastPostUserId: t.data.lastPostUserId || null,
+      lastPostUserName,
+    };
+  };
+
+  const [pinned, unpinned] = await Promise.all([
+    Promise.all(pinnedResult.records.map(enrichThread)),
+    Promise.all(unpinnedResult.records.map(enrichThread)),
+  ]);
+
+  // Sort pinned by lastPostDate DESC (or createdAt DESC)
+  pinned.sort((a, b) => (b.lastPostDate || b.createdAt) - (a.lastPostDate || a.createdAt));
+  // Sort unpinned by lastPostDate DESC
+  unpinned.sort((a, b) => (b.lastPostDate || b.createdAt) - (a.lastPostDate || a.createdAt));
+
+  const totalUnpinned = unpinnedResult.total;
+  const totalPages = Math.max(1, Math.ceil(totalUnpinned / PAGE_SIZE));
+
+  return NextResponse.json({
+    topic: {
+      id: topic.id,
+      name: topic.data.name,
+      hasIcon: !!topic.data.hasIcon,
+      locked: !!topic.data.locked,
+      forumId: topic.data.forumId,
+      forumName: access.forum.data.name,
+    },
+    access: access.level,
+    currentUserId: access.userId,
+    pinned,
+    threads: unpinned,
+    total: totalUnpinned,
+    page,
+    totalPages,
+  });
+}
+
+// POST /api/forums/topics/:topicId/threads — create a thread
+export async function POST(
+  req: NextRequest,
+  context: ApiContext,
+  params: { topicId: string },
+) {
+  const { topicId } = params;
+  const topics = context.recordManager<TopicRecord>("forums", "topic");
+  const topic = await topics.readRecord(topicId);
+  if (!topic) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const access = await getForumAccess(context, topic.data.forumId);
+  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!canPost(access.level)) {
+    return NextResponse.json({ error: "Forbidden — you do not have post permissions" }, { status: 403 });
+  }
+  if (topic.data.locked && !canModerate(access.level)) {
+    return NextResponse.json({ error: "Forbidden — this topic is locked" }, { status: 403 });
+  }
+
+  try {
+    const body = await req.json();
+    if (!body.name?.trim()) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    const user = await context.user();
+    const threads = context.recordManager<ThreadRecord>("forums", "thread");
+    const table = await threads.getTable();
+    const record = await threads.createRecord(table, {
+      topicId,
+      forumId: topic.data.forumId,
+      name: body.name.trim(),
+      description: body.description?.trim() || "",
+      createdBy: user!.id,
+      pinned: false,
+      locked: false,
+      lastPostDate: null,
+      lastPostUserId: null,
+    });
+
+    return NextResponse.json({ id: record.id, ...record.data }, { status: 201 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
