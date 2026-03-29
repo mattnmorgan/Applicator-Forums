@@ -59,12 +59,16 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/forums/threads/${threadId}/messages?page=${p}`);
-      if (res.ok) setData(await res.json());
+      if (res.ok) {
+        setData(await res.json());
+        bodyRef.current?.scrollTo({ top: 0 });
+      }
     } finally {
       setLoading(false);
     }
@@ -78,8 +82,8 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
   const topicLocked = !!data?.topic.locked;
   const canReply = canPost && (!threadLocked || canModerate) && (!topicLocked || canModerate);
   const isCreator = data?.thread.createdBy === data?.currentUserId;
-  const canEdit = (isCreator || canModerate) && !!data;
-  const canDelete = (isCreator || canModerate) && !!data;
+  const canEdit = (isCreator || canModerate) && !!data && (!threadLocked || canModerate) && (!topicLocked || canModerate);
+  const canDelete = (isCreator || canModerate) && !!data && (!threadLocked || canModerate) && (!topicLocked || canModerate);
 
   const handleReply = async () => {
     if (!replyHtml.trim()) return;
@@ -217,6 +221,24 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
           </span>
         </div>
 
+        {totalPages > 1 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            <ButtonIcon
+              name="chevron-left"
+              label="Previous page"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+            />
+            <span style={{ fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>{page} / {totalPages}</span>
+            <ButtonIcon
+              name="chevron-right"
+              label="Next page"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+            />
+          </div>
+        )}
+
         <div className={styles.headerActions}>
           {confirmDelete ? (
             <>
@@ -285,7 +307,7 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
         </div>
       </div>
 
-      <div className={styles.body} style={{ flex: 1, overflow: "auto" }}>
+      <div ref={bodyRef} className={styles.body} style={{ flex: 1, overflow: "auto" }}>
         {messages.length === 0 && (
           <div className={styles.emptyState}>
             <span className={styles.emptyStateTitle}>No messages yet</span>
@@ -303,30 +325,13 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
               currentUserId={data.currentUserId}
               canModerate={canModerate}
               threadLocked={threadLocked}
+              topicLocked={topicLocked}
               onUpdated={handleMessageUpdated}
               onDeleted={handleMessageDeleted}
               onRemoved={handleMessageRemoved}
             />
           ))}
         </div>
-
-        {totalPages > 1 && (
-          <div className={styles.pagination}>
-            <ButtonIcon
-              name="chevron-left"
-              label="Previous page"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-            />
-            <span>Page {page} of {totalPages}</span>
-            <ButtonIcon
-              name="chevron-right"
-              label="Next page"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            />
-          </div>
-        )}
 
         <div ref={bottomRef} />
       </div>
@@ -380,6 +385,7 @@ function MessageRow({
   currentUserId,
   canModerate,
   threadLocked,
+  topicLocked,
   onUpdated,
   onDeleted,
   onRemoved,
@@ -388,13 +394,14 @@ function MessageRow({
   currentUserId: string;
   canModerate: boolean;
   threadLocked: boolean;
+  topicLocked: boolean;
   onUpdated: (m: MessageSummary) => void;
   onDeleted: (id: string) => void;
   onRemoved: (id: string) => void;
 }) {
   const isAuthor = message.authorId === currentUserId;
-  const canEdit = (isAuthor || canModerate) && !message.removed && (!threadLocked || canModerate);
-  const canDelete = (isAuthor || canModerate) && !message.removed && (!threadLocked || canModerate);
+  const canEdit = (isAuthor || canModerate) && !message.removed && (!threadLocked || canModerate) && (!topicLocked || canModerate);
+  const canDelete = (isAuthor || canModerate) && !message.removed && (!threadLocked || canModerate) && (!topicLocked || canModerate);
   const [editing, setEditing] = useState(false);
   const [editHtml, setEditHtml] = useState(message.content);
   const [saving, setSaving] = useState(false);

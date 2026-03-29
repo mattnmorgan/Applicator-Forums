@@ -400,37 +400,64 @@ function MembersTab({ forumId }: { forumId: string }) {
 
       {loading ? (
         <div style={{ color: "#64748b", fontSize: 13 }}>Loading…</div>
-      ) : shares.length === 0 ? (
-        <div style={{ color: "#64748b", fontSize: 13 }}>No members yet.</div>
       ) : (
-        shares.map((share) => (
-          <div key={share.id} className={styles.shareRow}>
-            <ProfileIndicator
-              displayName={share.displayName}
-              profilePicture={share.profilePicture || undefined}
-            />
-            <div className={styles.shareRowInfo}>
-              <div className={styles.shareRowName}>{share.displayName}</div>
-              <div className={styles.shareRowUsername}>@{share.username}</div>
-            </div>
-            <select
-              className={styles.roleSelect}
-              value={share.role}
-              onChange={(e) => handleRoleChange(share.id, e.target.value)}
-            >
-              <option value="moderator">Moderator</option>
-              <option value="member">Member</option>
-              <option value="viewer">Viewer</option>
-            </select>
-            <Button
-              variant="ghost"
-              onClick={() => handleRevoke(share.id)}
-              style={{ color: "#ef4444", fontSize: 12 }}
-            >
-              Remove
-            </Button>
-          </div>
-        ))
+        <div className={styles.shareTableWrap}>
+          <table className={styles.shareTable}>
+            <thead>
+              <tr>
+                <th className={styles.shareTableHeader}>Member</th>
+                <th className={styles.shareTableHeader} style={{ width: 130 }}>Role</th>
+                <th className={styles.shareTableHeader} style={{ width: 80 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {shares.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className={styles.shareRowCell} style={{ color: "#64748b", fontSize: 13 }}>
+                    No members yet.
+                  </td>
+                </tr>
+              ) : (
+                shares.map((share) => (
+                  <tr key={share.id} className={styles.shareRow}>
+                    <td className={styles.shareRowCell}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <ProfileIndicator
+                          displayName={share.displayName}
+                          profilePicture={share.profilePicture || undefined}
+                        />
+                        <div>
+                          <div style={{ fontSize: 13, color: "#e2e8f0" }}>{share.displayName}</div>
+                          <div style={{ fontSize: 11, color: "#64748b" }}>@{share.username}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className={styles.shareRowCell}>
+                      <select
+                        className={styles.roleSelect}
+                        value={share.role}
+                        onChange={(e) => handleRoleChange(share.id, e.target.value)}
+                      >
+                        <option value="moderator">Moderator</option>
+                        <option value="member">Member</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </td>
+                    <td className={styles.shareRowCell} style={{ textAlign: "right" }}>
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleRevoke(share.id)}
+                        style={{ color: "#ef4444", fontSize: 12 }}
+                      >
+                        Remove
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

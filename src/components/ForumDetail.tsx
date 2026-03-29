@@ -296,7 +296,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
               placement="bottom"
             />
           )}
-          {canModerate && (
+          {forum.access === "owner" && (
             <ButtonIcon
               name="settings"
               iconSize={14}

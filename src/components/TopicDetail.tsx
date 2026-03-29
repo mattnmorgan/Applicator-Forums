@@ -167,7 +167,7 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
         )}
 
         <div>
-          <div className={styles.threadSectionLabelNormal}>THREADS</div>
+          {threads.length > 0 && <div className={styles.threadSectionLabelNormal}>THREADS</div>}
           {threads.length === 0 && pinned.length === 0 && (
             <div className={styles.emptyState}>
               <span className={styles.emptyStateTitle}>No threads yet</span>

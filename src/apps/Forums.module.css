@@ -507,12 +507,14 @@
 .messageList {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 .messageRow {
-  border-bottom: 1px solid #1e293b;
-  padding: 12px 0;
+  border: 1px solid #1e3a5f;
+  border-radius: 8px;
+  background: #1e293b;
+  margin-bottom: 6px;
+  overflow: hidden;
 }
 
 .messageAuthorInline {
@@ -532,9 +534,9 @@
   gap: 8px;
   font-size: 11px;
   color: #475569;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #1e293b;
+  padding: 5px 8px;
+  background: #151f2e;
+  border-bottom: 1px solid #1e3a5f;
 }
 
 .messageSubheaderActions {
@@ -548,19 +550,21 @@
   font-size: 14px;
   line-height: 1.6;
   color: #cbd5e1;
+  padding: 8px;
 }
 
 .messageRemoved {
   font-size: 13px;
   color: #475569;
   font-style: italic;
-  padding: 8px 0;
+  padding: 8px;
 }
 
 .messageEditingArea {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 8px;
 }
 
 .messageEditActions {
@@ -696,6 +700,12 @@
   color: #475569;
 }
 
+.shareTableWrap {
+  border: 1px solid #1e3a5f;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
 .shareTable {
   width: 100%;
   border-collapse: collapse;
@@ -708,17 +718,33 @@
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0 8px 8px 0;
-  border-bottom: 1px solid #1e293b;
+  padding: 8px 12px;
+  background: #0f172a;
+  border-bottom: 1px solid #1e3a5f;
 }
 
 .shareRow td {
   border-bottom: 1px solid #1e293b;
 }
 
+.shareRow:last-child td {
+  border-bottom: none;
+}
+
 .shareRowCell {
-  padding: 8px 8px 8px 0;
+  padding: 8px 12px;
   vertical-align: middle;
+  background: #1e293b;
+  white-space: nowrap;
+}
+
+.shareRowCell:first-child {
+  white-space: normal;
+  width: 100%;
+}
+
+.shareRow:hover .shareRowCell {
+  background: #243044;
 }
 
 .roleSelect {
