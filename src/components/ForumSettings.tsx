@@ -340,7 +340,7 @@ function MembersTab({ forumId }: { forumId: string }) {
   const availableUsers = users.filter((u) => !alreadySharedIds.has(u.id));
 
   return (
-    <div style={{ maxWidth: 520 }}>
+    <div>
       {error && (
         <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 10 }}>
           {error}
@@ -351,7 +351,7 @@ function MembersTab({ forumId }: { forumId: string }) {
         style={{
           display: "flex",
           gap: 8,
-          alignItems: "flex-start",
+          alignItems: "center",
           marginBottom: 20,
         }}
       >
@@ -426,10 +426,7 @@ function MembersTab({ forumId }: { forumId: string }) {
                           displayName={share.displayName}
                           profilePicture={share.profilePicture || undefined}
                         />
-                        <div>
-                          <div style={{ fontSize: 13, color: "#e2e8f0" }}>{share.displayName}</div>
-                          <div style={{ fontSize: 11, color: "#64748b" }}>@{share.username}</div>
-                        </div>
+                        <span style={{ fontSize: 11, color: "#64748b" }}>@{share.username}</span>
                       </div>
                     </td>
                     <td className={styles.shareRowCell}>
