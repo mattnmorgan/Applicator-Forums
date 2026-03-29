@@ -3,7 +3,7 @@
   "name": "Forums",
   "version": {
     "major": 1,
-    "minor": 0,
+    "minor": 2,
     "dev": 0
   },
   "author": "Matthew Morgan",
@@ -236,27 +236,6 @@
       "name": "Create Forum",
       "description": "Can create new forums",
       "target": "user"
-    },
-    {
-      "id": "forum-moderator",
-      "name": "Forum Moderator",
-      "description": "Moderator access to a specific forum",
-      "contextual": true,
-      "target": "user"
-    },
-    {
-      "id": "forum-member",
-      "name": "Forum Member",
-      "description": "Member access (view and post) to a specific forum",
-      "contextual": true,
-      "target": "user"
-    },
-    {
-      "id": "forum-viewer",
-      "name": "Forum Viewer",
-      "description": "View-only access to a specific forum",
-      "contextual": true,
-      "target": "user"
     }
   ],
   "authorities": [
@@ -266,6 +245,21 @@
       "authorizations": [
         "forums:create-forum"
       ]
+    },
+    {
+      "id": "forum-moderator",
+      "name": "Forum Moderator",
+      "description": "Moderator access to a specific forum"
+    },
+    {
+      "id": "forum-member",
+      "name": "Forum Member",
+      "description": "Member access (view and post) to a specific forum"
+    },
+    {
+      "id": "forum-viewer",
+      "name": "Forum Viewer",
+      "description": "View-only access to a specific forum"
     }
   ],
   "apiRoutes": [

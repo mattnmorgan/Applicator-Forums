@@ -84,6 +84,19 @@
   flex-shrink: 0;
 }
 
+.headerNavLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.headerNavLink:hover { background: #1e293b; }
+.headerNavLink:hover span { color: #e2e8f0; }
+
 .headerActions {
   display: flex;
   align-items: center;
@@ -309,7 +322,17 @@
   min-width: 120px;
 }
 
+.topicRowMetaLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #475569;
+  margin-bottom: 2px;
+}
+
 .topicRowMetaLine {
+  font-size: 11px;
+  color: #64748b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -414,6 +437,55 @@
   color: #64748b;
 }
 
+.threadRowMsgCountCol {
+  flex-shrink: 0;
+  width: 60px;
+  text-align: center;
+  padding-left: 8px;
+}
+
+.threadRowMsgCount {
+  font-size: 13px;
+  font-weight: 700;
+  color: #94a3b8;
+  line-height: 1;
+}
+
+.threadRowCreatorCol {
+  flex-shrink: 0;
+  width: 130px;
+  text-align: right;
+  padding-left: 12px;
+}
+
+.threadRowLastPostCol {
+  flex-shrink: 0;
+  width: 130px;
+  text-align: right;
+  padding-left: 12px;
+}
+
+.threadRowMetaLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #475569;
+  margin-bottom: 2px;
+}
+
+.threadRowMetaValue {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.threadRowMetaDate {
+  font-size: 11px;
+  color: #64748b;
+}
+
 .threadRowActions {
   flex-shrink: 0;
   opacity: 0;
@@ -439,33 +511,18 @@
 }
 
 .messageRow {
-  display: flex;
-  gap: 0;
   border-bottom: 1px solid #1e293b;
   padding: 12px 0;
 }
 
-.messageLeft {
-  width: 120px;
-  min-width: 120px;
-  padding: 0 12px 0 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-}
-
-.messageAuthorName {
-  font-size: 11px;
+.messageAuthorInline {
+  font-size: 12px;
   color: #94a3b8;
   font-weight: 600;
-  word-break: break-word;
-  text-align: center;
 }
 
 .messageRight {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 
@@ -518,6 +575,31 @@
   flex-direction: column;
   gap: 8px;
 }
+
+.replyEditorRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.replyPostBtn {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.postReplyBtn {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.postReplyBtn:hover:not(:disabled) { background: #2563eb; }
+.postReplyBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .replyActions {
   display: flex;
@@ -614,28 +696,29 @@
   color: #475569;
 }
 
-.shareRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
+.shareTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shareTableHeader {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 8px 8px 0;
   border-bottom: 1px solid #1e293b;
 }
 
-.shareRowInfo {
-  flex: 1;
-  min-width: 0;
+.shareRow td {
+  border-bottom: 1px solid #1e293b;
 }
 
-.shareRowName {
-  font-size: 13px;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-
-.shareRowUsername {
-  font-size: 11px;
-  color: #64748b;
+.shareRowCell {
+  padding: 8px 8px 8px 0;
+  vertical-align: middle;
 }
 
 .roleSelect {
@@ -715,6 +798,78 @@
   transition: color 0.1s, border-color 0.1s;
 }
 .addSectionBtn:hover { color: #e2e8f0; border-color: #475569; }
+
+/* ── Settings Screen (DrawerLayout) ─────────────────────── */
+.settingsNavItem {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
+  cursor: pointer;
+  margin-bottom: 2px;
+  transition: background 0.1s, color 0.1s;
+}
+.settingsNavItem:hover { background: #1e293b; color: #e2e8f0; }
+
+.settingsNavItemActive {
+  background: #1e3a5f;
+  color: #93c5fd;
+}
+.settingsNavItemActive:hover { background: #1e3a5f; color: #93c5fd; }
+
+.settingsNavItemDanger { color: #f87171; }
+.settingsNavItemDanger:hover { color: #fca5a5; }
+.settingsNavItemDanger.settingsNavItemActive { background: rgba(239,68,68,0.12); color: #f87171; }
+
+.settingsContent {
+  padding: 20px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Settings Screen (legacy tab bar) ────────────────────── */
+.settingsTabBar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #334155;
+  padding: 0 16px;
+  background: #1e293b;
+  flex-shrink: 0;
+}
+
+.settingsTab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.1s, border-color 0.1s;
+}
+.settingsTab:hover { color: #94a3b8; }
+
+.settingsTabActive {
+  color: #e2e8f0;
+  border-bottom-color: #3b82f6;
+}
+
+.sectionTopicDropZone {
+  min-height: 28px;
+  border: 1px dashed #334155;
+  border-radius: 4px;
+  margin: 4px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #475569;
+  transition: background 0.1s, border-color 0.1s;
+}
 
 .addTopicBtn {
   display: flex;

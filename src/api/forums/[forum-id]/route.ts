@@ -27,13 +27,16 @@ export async function GET(
   const sortedSections = sectionsResult.records
     .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
 
-  // Enrich topics with lastPostUser display name
+  // Enrich topics with lastPostUser display name and profile picture
   const enrichedTopics = await Promise.all(
     topicsResult.records.map(async (t) => {
       let lastPostUserName: string | null = null;
+      let lastPostUserProfilePicture: string | null = null;
       if (t.data.lastPostUserId) {
         const u = await userMgr.readRecord(t.data.lastPostUserId) as any;
         lastPostUserName = u?.data.display_name || u?.data.username || null;
+        lastPostUserProfilePicture = u?.data.icon
+          ? `/api/system/assets/icons/users/${t.data.lastPostUserId}` : null;
       }
       return {
         id: t.id,
@@ -46,6 +49,7 @@ export async function GET(
         lastPostDate: t.data.lastPostDate || null,
         lastPostUserId: t.data.lastPostUserId || null,
         lastPostUserName,
+        lastPostUserProfilePicture,
       };
     }),
   );

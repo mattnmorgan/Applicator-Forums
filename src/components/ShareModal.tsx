@@ -144,37 +144,56 @@ export default function ShareModal({ forumId, forumName, onClose }: Props) {
         {/* Existing shares */}
         {loading ? (
           <div style={{ color: "#64748b", fontSize: 13 }}>Loading…</div>
-        ) : shares.length === 0 ? (
-          <div style={{ color: "#64748b", fontSize: 13 }}>No shares yet.</div>
         ) : (
-          shares.map((share) => (
-            <div key={share.id} className={styles.shareRow}>
-              <ProfileIndicator
-                displayName={share.displayName}
-                profilePicture={share.profilePicture || undefined}
-              />
-              <div className={styles.shareRowInfo}>
-                <div className={styles.shareRowName}>{share.displayName}</div>
-                <div className={styles.shareRowUsername}>@{share.username}</div>
-              </div>
-              <select
-                className={styles.roleSelect}
-                value={share.role}
-                onChange={(e) => handleRoleChange(share.id, e.target.value)}
-              >
-                <option value="moderator">Moderator</option>
-                <option value="member">Member</option>
-                <option value="viewer">Viewer</option>
-              </select>
-              <Button
-                variant="ghost"
-                onClick={() => handleRevoke(share.id)}
-                style={{ color: "#ef4444", fontSize: 12 }}
-              >
-                Remove
-              </Button>
-            </div>
-          ))
+          <table className={styles.shareTable}>
+            <thead>
+              <tr>
+                <th className={styles.shareTableHeader}>Member</th>
+                <th className={styles.shareTableHeader}>Role</th>
+                <th className={styles.shareTableHeader} />
+              </tr>
+            </thead>
+            <tbody>
+              {shares.length === 0 ? (
+                <tr>
+                  <td colSpan={3} style={{ color: "#64748b", fontSize: 13, padding: "10px 0" }}>
+                    No members yet.
+                  </td>
+                </tr>
+              ) : (
+                shares.map((share) => (
+                  <tr key={share.id} className={styles.shareRow}>
+                    <td className={styles.shareRowCell}>
+                      <ProfileIndicator
+                        displayName={share.displayName}
+                        profilePicture={share.profilePicture || undefined}
+                      />
+                    </td>
+                    <td className={styles.shareRowCell}>
+                      <select
+                        className={styles.roleSelect}
+                        value={share.role}
+                        onChange={(e) => handleRoleChange(share.id, e.target.value)}
+                      >
+                        <option value="moderator">Moderator</option>
+                        <option value="member">Member</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </td>
+                    <td className={styles.shareRowCell} style={{ textAlign: "right" }}>
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleRevoke(share.id)}
+                        style={{ color: "#ef4444", fontSize: 12 }}
+                      >
+                        Remove
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         )}
       </div>
     </Modal>

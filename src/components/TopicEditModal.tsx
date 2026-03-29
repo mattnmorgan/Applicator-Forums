@@ -85,7 +85,7 @@ export default function TopicEditModal({ topic, onClose, onUpdated }: Props) {
       onClose={onClose}
       maxWidth={480}
     >
-      <div style={{ padding: "4px 0" }}>
+      <div style={{ padding: 16 }}>
         {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
         <div className={styles.formRow}>

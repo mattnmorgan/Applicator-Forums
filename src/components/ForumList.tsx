@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Icon, ButtonIcon } from "@applicator/sdk/components";
+import { Icon, ButtonIcon, ProfileIndicator, Tooltip } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
 import CreateForumModal from "./CreateForumModal";
 
@@ -11,6 +11,7 @@ interface ForumSummary {
   description: string;
   ownerId: string;
   ownerName: string;
+  ownerProfilePicture?: string | null;
   hasIcon: boolean;
   role: string;
 }
@@ -24,6 +25,7 @@ export default function ForumList({ onOpen }: Props) {
   const [shared, setShared] = useState<ForumSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [canCreate, setCanCreate] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -33,6 +35,7 @@ export default function ForumList({ onOpen }: Props) {
         const data = await res.json();
         setOwned(data.owned || []);
         setShared(data.shared || []);
+        setCanCreate(!!data.canCreate);
       }
     } finally {
       setLoading(false);
@@ -53,13 +56,15 @@ export default function ForumList({ onOpen }: Props) {
       <div className={styles.listSection}>
         <div className={styles.listSectionHeader}>
           <span className={styles.listSectionTitle}>My Forums</span>
-          <ButtonIcon
-            name="plus"
-            label="Create a new forum"
-            onClick={() => setShowCreate(true)}
-            size="sm"
-            placement="bottom"
-          />
+          {canCreate && (
+            <ButtonIcon
+              name="plus"
+              label="Create a new forum"
+              onClick={() => setShowCreate(true)}
+              size="sm"
+              placement="bottom"
+            />
+          )}
         </div>
 
         {owned.length === 0 && (
@@ -75,9 +80,6 @@ export default function ForumList({ onOpen }: Props) {
           <ForumRowItem key={f.id} forum={f} onClick={() => onOpen(f.id)} />
         ))}
 
-        <button className={styles.newForumBtn} onClick={() => setShowCreate(true)}>
-          <Icon name="plus" size={14} /> New Forum
-        </button>
       </div>
 
       {shared.length > 0 && (
@@ -135,12 +137,12 @@ function ForumRowItem({
         )}
       </div>
       {showOwner && (
-        <div className={styles.forumRowMeta}>
-          by {forum.ownerName}
-          {forum.role !== "owner" && (
-            <div style={{ color: "#475569" }}>{forum.role}</div>
-          )}
-        </div>
+        <Tooltip text={forum.ownerName} placement="top">
+          <ProfileIndicator
+            displayName={forum.ownerName}
+            profilePicture={forum.ownerProfilePicture || undefined}
+          />
+        </Tooltip>
       )}
     </div>
   );

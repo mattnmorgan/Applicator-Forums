@@ -48,6 +48,7 @@ export async function GET(_req: NextRequest, context: ApiContext) {
       description: forum.data.description || "",
       ownerId: forum.data.ownerId,
       ownerName: ownerRec?.data.display_name || ownerRec?.data.username || forum.data.ownerId,
+      ownerProfilePicture: ownerRec?.data.icon ? `/api/system/assets/icons/users/${forum.data.ownerId}` : null,
       hasIcon: !!forum.data.hasIcon,
       role: ctx.role || "viewer",
       shareId: ca.id,
@@ -55,6 +56,8 @@ export async function GET(_req: NextRequest, context: ApiContext) {
   }
 
   const ownerDisplayName = (user as any).display_name || (user as any).displayName || (user as any).username || user.id;
+
+  const canCreate = await context.isUserAuthorizedFor("forums:create-forum");
 
   return NextResponse.json({
     owned: ownedResult.records.map((r) => ({
@@ -67,6 +70,7 @@ export async function GET(_req: NextRequest, context: ApiContext) {
       role: "owner",
     })),
     shared: sharedForums,
+    canCreate,
   });
 }
 

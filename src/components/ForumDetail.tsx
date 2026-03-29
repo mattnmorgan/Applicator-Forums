@@ -3,8 +3,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { ButtonIcon, Icon } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
-import ForumSettingsModal from "./ForumSettingsModal";
-import ShareModal from "./ShareModal";
 import TopicEditModal from "./TopicEditModal";
 
 interface TopicSummary {
@@ -17,6 +15,7 @@ interface TopicSummary {
   locked: boolean;
   lastPostDate: number | null;
   lastPostUserName: string | null;
+  lastPostUserProfilePicture: string | null;
 }
 
 interface SectionSummary {
@@ -41,14 +40,14 @@ interface Props {
   forumId: string;
   onBack: () => void;
   onNavigateToTopic: (topicId: string) => void;
+  onNavigateToSettings: (forumData: ForumData) => void;
 }
 
-export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Props) {
+export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavigateToSettings: _onNavigateToSettings }: Props) {
+  const onNavigateToSettings = () => forum && _onNavigateToSettings(forum);
   const [forum, setForum] = useState<ForumData | null>(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showShare, setShowShare] = useState(false);
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState("");
@@ -60,6 +59,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
   // Drag state for topics
   const [draggingTopicId, setDraggingTopicId] = useState<string | null>(null);
   const [dragOverTopicId, setDragOverTopicId] = useState<string | null>(null);
+  const [dragOverSectionDropId, setDragOverSectionDropId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,7 +106,6 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
     if (res.ok) {
       setForum((prev) => {
         if (!prev) return prev;
-        // Move topics from this section to unsectioned
         const updatedTopics = prev.topics.map((t) =>
           t.sectionId === sectionId ? { ...t, sectionId: null } : t,
         );
@@ -134,6 +133,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
         locked: false,
         lastPostDate: null,
         lastPostUserName: null,
+        lastPostUserProfilePicture: null,
       };
       setForum((prev) => prev ? { ...prev, topics: [...prev.topics, newTopic] } : prev);
     }
@@ -155,11 +155,14 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
   const handleSectionDragStart = (e: React.DragEvent, sectionId: string) => {
     e.stopPropagation();
     setDraggingSectionId(sectionId);
+    e.dataTransfer.setData("dragType", "section");
   };
 
   const handleSectionDragOver = (e: React.DragEvent, sectionId: string) => {
-    e.preventDefault();
-    setDragOverSectionId(sectionId);
+    if (draggingSectionId) {
+      e.preventDefault();
+      setDragOverSectionId(sectionId);
+    }
   };
 
   const handleSectionDrop = async (e: React.DragEvent, targetId: string) => {
@@ -190,11 +193,13 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
   const handleTopicDragStart = (e: React.DragEvent, topicId: string) => {
     e.stopPropagation();
     setDraggingTopicId(topicId);
+    e.dataTransfer.setData("dragType", "topic");
   };
 
   const handleTopicDragOver = (e: React.DragEvent, topicId: string) => {
     e.preventDefault();
     setDragOverTopicId(topicId);
+    setDragOverSectionDropId(null);
   };
 
   const handleTopicDrop = async (e: React.DragEvent, targetTopicId: string, targetSectionId: string | null) => {
@@ -202,35 +207,57 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
     if (!draggingTopicId || draggingTopicId === targetTopicId || !forum) {
       setDraggingTopicId(null); setDragOverTopicId(null); return;
     }
-    const draggingTopic = forum.topics.find((t) => t.id === draggingTopicId);
-    if (!draggingTopic) { setDraggingTopicId(null); setDragOverTopicId(null); return; }
+    await moveTopicToSection(draggingTopicId, targetSectionId, targetTopicId);
+  };
 
-    // If dropping into a different section, update sectionId
-    const newSectionId = targetSectionId;
+  // Drop on a section drop zone (for empty sections or end-of-section)
+  const handleSectionDropZoneDragOver = (e: React.DragEvent, sectionId: string | null) => {
+    if (draggingTopicId) {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOverSectionDropId(sectionId ?? "__unsectioned__");
+      setDragOverTopicId(null);
+    }
+  };
 
-    // Reorder within the target section
+  const handleSectionDropZoneDrop = async (e: React.DragEvent, sectionId: string | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggingTopicId || !forum) {
+      setDraggingTopicId(null); setDragOverSectionDropId(null); return;
+    }
+    await moveTopicToSection(draggingTopicId, sectionId, null);
+  };
+
+  const moveTopicToSection = async (topicId: string, newSectionId: string | null, beforeTopicId: string | null) => {
+    if (!forum) return;
+    const draggingTopic = forum.topics.find((t) => t.id === topicId);
+    if (!draggingTopic) { setDraggingTopicId(null); setDragOverTopicId(null); setDragOverSectionDropId(null); return; }
+
     const sectionTopics = forum.topics
-      .filter((t) => t.sectionId === newSectionId)
+      .filter((t) => t.sectionId === newSectionId && t.id !== topicId)
       .sort((a, b) => a.order - b.order);
 
-    const withoutDragging = sectionTopics.filter((t) => t.id !== draggingTopicId);
-    const toIdx = withoutDragging.findIndex((t) => t.id === targetTopicId);
-    const insertIdx = toIdx === -1 ? withoutDragging.length : toIdx;
-    withoutDragging.splice(insertIdx, 0, { ...draggingTopic, sectionId: newSectionId });
-    const reordered = withoutDragging.map((t, i) => ({ ...t, order: i }));
+    const insertIdx = beforeTopicId
+      ? sectionTopics.findIndex((t) => t.id === beforeTopicId)
+      : sectionTopics.length;
+
+    const withInserted = [...sectionTopics];
+    withInserted.splice(insertIdx === -1 ? withInserted.length : insertIdx, 0, { ...draggingTopic, sectionId: newSectionId });
+    const reordered = withInserted.map((t, i) => ({ ...t, order: i }));
 
     setForum((prev) => {
       if (!prev) return prev;
-      const otherTopics = prev.topics.filter((t) => t.id !== draggingTopicId && t.sectionId !== newSectionId);
+      const otherTopics = prev.topics.filter((t) => t.id !== topicId && t.sectionId !== newSectionId);
       return { ...prev, topics: [...otherTopics, ...reordered] };
     });
-    setDraggingTopicId(null); setDragOverTopicId(null);
+    setDraggingTopicId(null); setDragOverTopicId(null); setDragOverSectionDropId(null);
 
     try {
-      await fetch(`/api/forums/topics/${draggingTopicId}`, {
+      await fetch(`/api/forums/topics/${topicId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sectionId: newSectionId, order: reordered.find((t) => t.id === draggingTopicId)?.order }),
+        body: JSON.stringify({ sectionId: newSectionId, order: reordered.find((t) => t.id === topicId)?.order ?? 0 }),
       });
     } catch {}
   };
@@ -246,7 +273,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
       {/* Header */}
       <div className={styles.header}>
         <button className={styles.backBtn} onClick={onBack}>
-          <Icon name="chevron-left" size={14} /> Back
+          <Icon name="chevron-left" size={16} />
         </button>
 
         {forum.hasIcon ? (
@@ -271,19 +298,10 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
           )}
           {canModerate && (
             <ButtonIcon
-              name="users"
-              iconSize={14}
-              label="Manage sharing"
-              onClick={() => setShowShare(true)}
-              placement="bottom"
-            />
-          )}
-          {canModerate && (
-            <ButtonIcon
               name="settings"
               iconSize={14}
               label="Forum settings"
-              onClick={() => setShowSettings(true)}
+              onClick={onNavigateToSettings}
               placement="bottom"
             />
           )}
@@ -304,11 +322,14 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
             .filter((t) => t.sectionId === section.id)
             .sort((a, b) => a.order - b.order);
 
+          // In non-edit mode, hide empty sections
+          if (!editMode && sectionTopics.length === 0) return null;
+
           return (
             <div
               key={section.id}
               className={`${styles.sectionGroup} ${editMode && dragOverSectionId === section.id ? styles.sectionDragOver : ""}`}
-              draggable={editMode}
+              draggable={editMode && !draggingTopicId}
               onDragStart={editMode ? (e) => handleSectionDragStart(e, section.id) : undefined}
               onDragOver={editMode ? (e) => handleSectionDragOver(e, section.id) : undefined}
               onDrop={editMode ? (e) => handleSectionDrop(e, section.id) : undefined}
@@ -363,11 +384,26 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
                   onDragStart={(e) => handleTopicDragStart(e, topic.id)}
                   onDragOver={(e) => handleTopicDragOver(e, topic.id)}
                   onDrop={(e) => handleTopicDrop(e, topic.id, topic.sectionId)}
-                  onDragEnd={() => { setDraggingTopicId(null); setDragOverTopicId(null); }}
+                  onDragEnd={() => { setDraggingTopicId(null); setDragOverTopicId(null); setDragOverSectionDropId(null); }}
                   onEdit={() => setEditingTopicId(topic.id)}
                   onDelete={() => handleDeleteTopic(topic.id)}
                 />
               ))}
+
+              {/* Drop zone for empty section or end of section when dragging a topic */}
+              {editMode && draggingTopicId && (
+                <div
+                  className={styles.sectionTopicDropZone}
+                  style={{
+                    background: dragOverSectionDropId === section.id ? "rgba(59,130,246,0.1)" : undefined,
+                    borderColor: dragOverSectionDropId === section.id ? "#3b82f6" : undefined,
+                  }}
+                  onDragOver={(e) => handleSectionDropZoneDragOver(e, section.id)}
+                  onDrop={(e) => handleSectionDropZoneDrop(e, section.id)}
+                >
+                  {sectionTopics.length === 0 ? "Drop topic here" : ""}
+                </div>
+              )}
 
               {editMode && (
                 <button className={styles.addTopicBtn} onClick={() => handleAddTopic(section.id)}>
@@ -406,11 +442,24 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
                   onDragStart={(e) => handleTopicDragStart(e, topic.id)}
                   onDragOver={(e) => handleTopicDragOver(e, topic.id)}
                   onDrop={(e) => handleTopicDrop(e, topic.id, null)}
-                  onDragEnd={() => { setDraggingTopicId(null); setDragOverTopicId(null); }}
+                  onDragEnd={() => { setDraggingTopicId(null); setDragOverTopicId(null); setDragOverSectionDropId(null); }}
                   onEdit={() => setEditingTopicId(topic.id)}
                   onDelete={() => handleDeleteTopic(topic.id)}
                 />
               ))}
+
+              {editMode && draggingTopicId && (
+                <div
+                  className={styles.sectionTopicDropZone}
+                  style={{
+                    background: dragOverSectionDropId === "__unsectioned__" ? "rgba(59,130,246,0.1)" : undefined,
+                    borderColor: dragOverSectionDropId === "__unsectioned__" ? "#3b82f6" : undefined,
+                  }}
+                  onDragOver={(e) => handleSectionDropZoneDragOver(e, null)}
+                  onDrop={(e) => handleSectionDropZoneDrop(e, null)}
+                />
+              )}
+
               {editMode && (
                 <button className={styles.addTopicBtn} onClick={() => handleAddTopic(null)}>
                   <Icon name="plus" size={12} /> Add Topic
@@ -437,23 +486,6 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic }: Prop
           </button>
         )}
       </div>
-
-      {showSettings && forum && (
-        <ForumSettingsModal
-          forum={forum}
-          onClose={() => setShowSettings(false)}
-          onUpdated={(updated) => setForum((prev) => prev ? { ...prev, ...updated } : prev)}
-          onDeleted={onBack}
-        />
-      )}
-
-      {showShare && (
-        <ShareModal
-          forumId={forumId}
-          forumName={forum.name}
-          onClose={() => setShowShare(false)}
-        />
-      )}
 
       {editingTopic && (
         <TopicEditModal
@@ -519,7 +551,7 @@ function TopicRowItem({
         <div className={styles.topicRowName}>
           {topic.name}
           {topic.locked && (
-            <span className={styles.lockedBadge}><Icon name="square-stop" size={10} /> Locked</span>
+            <span className={styles.lockedBadge}><Icon name="lock" size={10} /> Locked</span>
           )}
         </div>
         {topic.description && (
@@ -531,6 +563,7 @@ function TopicRowItem({
         <div className={styles.topicRowMeta}>
           {topic.lastPostDate ? (
             <>
+              <div className={styles.topicRowMetaLabel}>LAST POST</div>
               <div className={styles.topicRowMetaLine}>
                 {new Date(topic.lastPostDate).toLocaleDateString()}
               </div>

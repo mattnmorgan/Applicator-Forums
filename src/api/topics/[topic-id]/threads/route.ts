@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ApiContext } from "@applicator/sdk/context";
 import { TopicRecord } from "@/src/types/TopicRecord";
 import { ThreadRecord } from "@/src/types/ThreadRecord";
+import { MessageRecord } from "@/src/types/MessageRecord";
 import { getForumAccess, canPost, canModerate } from "@/src/lib/forum-access";
 
 const PAGE_SIZE = 100;
@@ -25,6 +26,7 @@ export async function GET(
   const offset = (page - 1) * PAGE_SIZE;
 
   const threads = context.recordManager<ThreadRecord>("forums", "thread");
+  const messagesRm = context.recordManager<MessageRecord>("forums", "message");
   const userMgr = context.recordManager("system", "users");
 
   // Get pinned threads (no pagination)
@@ -45,25 +47,34 @@ export async function GET(
     offset,
   });
 
-  const enrichThread = async (t: { id: string; data: ThreadRecord; createdAt: number }) => {
+  const enrichThread = async (t: { id: string; data: ThreadRecord; created_at: number }) => {
     const creator = await userMgr.readRecord(t.data.createdBy) as any;
+    const createdByProfilePicture = creator?.data.icon
+      ? `/api/system/assets/icons/users/${t.data.createdBy}` : null;
     let lastPostUserName: string | null = null;
+    let lastPostUserProfilePicture: string | null = null;
     if (t.data.lastPostUserId) {
       const u = await userMgr.readRecord(t.data.lastPostUserId) as any;
       lastPostUserName = u?.data.display_name || u?.data.username || null;
+      lastPostUserProfilePicture = u?.data.icon
+        ? `/api/system/assets/icons/users/${t.data.lastPostUserId}` : null;
     }
+    const msgResult = await messagesRm.readRecords({ fields: { threadId: t.id }, limit: 1 });
     return {
       id: t.id,
       name: t.data.name,
       description: t.data.description || "",
       createdBy: t.data.createdBy,
       createdByName: creator?.data.display_name || creator?.data.username || t.data.createdBy,
-      createdAt: t.createdAt,
+      createdByProfilePicture,
+      createdAt: t.created_at,
       pinned: !!t.data.pinned,
       locked: !!t.data.locked,
       lastPostDate: t.data.lastPostDate || null,
       lastPostUserId: t.data.lastPostUserId || null,
       lastPostUserName,
+      lastPostUserProfilePicture,
+      messageCount: msgResult.total,
     };
   };
 
@@ -88,6 +99,7 @@ export async function GET(
       locked: !!topic.data.locked,
       forumId: topic.data.forumId,
       forumName: access.forum.data.name,
+      forumHasIcon: !!access.forum.data.hasIcon,
     },
     access: access.level,
     currentUserId: access.userId,
@@ -139,6 +151,32 @@ export async function POST(
       lastPostDate: null,
       lastPostUserId: null,
     });
+
+    // Create the initial message if content was provided
+    if (body.content?.trim()) {
+      const now = Date.now();
+      const messages = context.recordManager<MessageRecord>("forums", "message");
+      const msgTable = await messages.getTable();
+      await messages.createRecord(msgTable, {
+        threadId: record.id,
+        forumId: topic.data.forumId,
+        content: body.content.trim(),
+        authorId: user!.id,
+        edited: false,
+        editedAt: null,
+        removed: false,
+      });
+      const threadTable = await threads.getTable();
+      await threads.updateRecord(threadTable, record.id, {
+        lastPostDate: now,
+        lastPostUserId: user!.id,
+      });
+      const topicTable = await topics.getTable();
+      await topics.updateRecord(topicTable, topic.id, {
+        lastPostDate: now,
+        lastPostUserId: user!.id,
+      });
+    }
 
     return NextResponse.json({ id: record.id, ...record.data }, { status: 201 });
   } catch (error: any) {

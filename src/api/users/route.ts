@@ -8,7 +8,7 @@ export async function GET(_req: NextRequest, context: ApiContext) {
 
   const userMgr = context.recordManager("system", "users");
   const result = await userMgr.readRecords({
-    filters: [{ field: "active", operator: "=", value: true }],
+    filters: [{ field: "is_active", operator: "=", value: true }],
     limit: 500,
   });
 

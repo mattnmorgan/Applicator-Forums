@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Modal, Button } from "@applicator/sdk/components";
+import { Modal, Button, RichTextEditor } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
 export default function NewThreadModal({ topicId, onClose, onCreated }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [contentHtml, setContentHtml] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -24,7 +25,11 @@ export default function NewThreadModal({ topicId, onClose, onCreated }: Props) {
       const res = await fetch(`/api/forums/topics/${topicId}/threads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim(),
+          content: contentHtml,
+        }),
       });
       if (res.ok) {
         onCreated(await res.json());
@@ -50,9 +55,9 @@ export default function NewThreadModal({ topicId, onClose, onCreated }: Props) {
       }
       closeable
       onClose={onClose}
-      maxWidth={480}
+      maxWidth={600}
     >
-      <div style={{ padding: "4px 0" }}>
+      <div style={{ padding: 16 }}>
         {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div>}
         <div className={styles.formRow}>
           <label className={styles.formLabel}>Thread Title</label>
@@ -67,11 +72,21 @@ export default function NewThreadModal({ topicId, onClose, onCreated }: Props) {
         </div>
         <div className={styles.formRow}>
           <label className={styles.formLabel}>Description (optional)</label>
-          <textarea
-            className={styles.formTextarea}
+          <input
+            className={styles.formInput}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Brief description of this thread…"
+          />
+        </div>
+        <div className={styles.formRow}>
+          <label className={styles.formLabel}>First Post</label>
+          <RichTextEditor
+            value={contentHtml}
+            onChange={setContentHtml}
+            placeholder="Write the first message of this thread…"
+            minHeight={120}
+            disabled={saving}
           />
         </div>
       </div>

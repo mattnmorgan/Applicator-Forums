@@ -34,8 +34,8 @@ export async function GET(
     offset,
   });
 
-  // Sort by createdAt ascending (records are returned in creation order)
-  const sorted = [...result.records].sort((a, b) => a.createdAt - b.createdAt);
+  // Sort by created_at ascending
+  const sorted = [...result.records].sort((a, b) => a.created_at - b.created_at);
 
   const enriched = await Promise.all(
     sorted.map(async (m) => {
@@ -55,8 +55,8 @@ export async function GET(
         edited: !!m.data.edited,
         editedAt: m.data.editedAt || null,
         removed: !!m.data.removed,
-        createdAt: m.createdAt,
-        updatedAt: m.updatedAt,
+        createdAt: m.created_at,
+        updatedAt: m.updated_at,
       };
     }),
   );
@@ -72,6 +72,7 @@ export async function GET(
       name: thread.data.name,
       description: thread.data.description || "",
       locked: !!thread.data.locked,
+      pinned: !!thread.data.pinned,
       topicId: thread.data.topicId,
       forumId: thread.data.forumId,
       createdBy: thread.data.createdBy,
@@ -79,10 +80,13 @@ export async function GET(
     topic: {
       id: topic?.id,
       name: topic?.data.name || "",
+      hasIcon: !!topic?.data.hasIcon,
+      locked: !!topic?.data.locked,
     },
     forum: {
       id: access.forum.id,
       name: access.forum.data.name,
+      hasIcon: !!access.forum.data.hasIcon,
     },
     access: access.level,
     currentUserId: access.userId,
@@ -169,8 +173,8 @@ export async function POST(
         edited: false,
         editedAt: null,
         removed: false,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt,
+        createdAt: record.created_at,
+        updatedAt: record.updated_at,
       },
       { status: 201 },
     );

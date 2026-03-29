@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { ButtonIcon, Icon, ButtonMenu } from "@applicator/sdk/components";
+import { ButtonIcon, Icon, ButtonMenu, ProfileIndicator } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
 import NewThreadModal from "./NewThreadModal";
 import EditThreadModal from "./EditThreadModal";
@@ -12,11 +12,14 @@ interface ThreadSummary {
   description: string;
   createdBy: string;
   createdByName: string;
+  createdByProfilePicture: string | null;
   createdAt: number;
   pinned: boolean;
   locked: boolean;
   lastPostDate: number | null;
   lastPostUserName: string | null;
+  lastPostUserProfilePicture: string | null;
+  messageCount: number;
 }
 
 interface TopicInfo {
@@ -26,6 +29,7 @@ interface TopicInfo {
   locked: boolean;
   forumId: string;
   forumName: string;
+  forumHasIcon: boolean;
 }
 
 interface PageData {
@@ -43,9 +47,10 @@ interface Props {
   topicId: string;
   onBack: () => void;
   onNavigateToThread: (threadId: string) => void;
+  onNavigateToForum: () => void;
 }
 
-export default function TopicDetail({ topicId, onBack, onNavigateToThread }: Props) {
+export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNavigateToForum }: Props) {
   const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -104,7 +109,6 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread }: Pro
       body: JSON.stringify({ pinned: !thread.pinned }),
     });
     if (res.ok) {
-      // Reload to reflect pin/unpin change
       load(page);
     }
   };
@@ -147,9 +151,22 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread }: Pro
     <>
       <div className={styles.header}>
         <button className={styles.backBtn} onClick={onBack}>
-          <Icon name="chevron-left" size={14} /> Back
+          <Icon name="chevron-left" size={16} />
         </button>
 
+        {/* Forum icon + name — clickable */}
+        <div className={styles.headerNavLink} onClick={onNavigateToForum}>
+          {topic.forumHasIcon ? (
+            <img src={`/api/forums/icons/forums/${topic.forumId}`} alt="" className={styles.headerIcon} />
+          ) : (
+            <div className={styles.headerIconPlaceholder}><Icon name="users" size={14} /></div>
+          )}
+          <span style={{ fontSize: 14, color: "#94a3b8", fontWeight: 500 }}>{topic.forumName}</span>
+        </div>
+
+        <span style={{ color: "#475569", margin: "0 4px", flexShrink: 0 }}>/</span>
+
+        {/* Topic icon + name */}
         {topic.hasIcon ? (
           <img src={`/api/forums/icons/topics/${topic.id}`} alt="" className={styles.headerIcon} />
         ) : (
@@ -160,7 +177,7 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread }: Pro
           {topic.name}
           {topic.locked && (
             <span className={styles.lockedBadge} style={{ marginLeft: 8 }}>
-              <Icon name="square-stop" size={10} /> Locked
+              <Icon name="lock" size={10} /> Locked
             </span>
           )}
         </span>
@@ -177,7 +194,7 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread }: Pro
           )}
           {canModerate && (
             <ButtonIcon
-              name={topic.locked ? "square-stop" : "square-stop"}
+              name={topic.locked ? "unlock" : "lock"}
               iconSize={14}
               label={topic.locked ? "Unlock topic" : "Lock topic"}
               onClick={handleTopicLock}
@@ -301,7 +318,7 @@ function ThreadRowItem({
   if (canEdit) menuOptions.push({ label: "Edit", icon: "edit", onClick: onEdit });
   if (canModerate) {
     menuOptions.push({ label: thread.pinned ? "Unpin" : "Pin", icon: "pin", onClick: onTogglePin });
-    menuOptions.push({ label: thread.locked ? "Unlock" : "Lock", icon: "square-stop", onClick: onToggleLock });
+    menuOptions.push({ label: thread.locked ? "Unlock" : "Lock", icon: thread.locked ? "unlock" : "lock", onClick: onToggleLock });
   }
   if (menuOptions.length > 0 && canDelete) {
     menuOptions.push({ type: "separator" as const });
@@ -310,29 +327,52 @@ function ThreadRowItem({
     menuOptions.push({ label: "Delete", icon: "trash", onClick: onDelete, variant: "danger" as const });
   }
 
+  const createdDate = thread.createdAt ? new Date(thread.createdAt).toLocaleDateString() : "";
+
   return (
     <div className={styles.threadRow} onClick={onClick}>
+      {/* Main content */}
       <div className={styles.threadRowContent}>
         <div className={styles.threadRowName}>
           {thread.name}
           {thread.pinned && <span style={{ color: "#3b82f6", fontSize: 12 }}><Icon name="pin" size={12} /></span>}
           {thread.locked && (
-            <span className={styles.lockedBadge}><Icon name="square-stop" size={10} /> Locked</span>
+            <span className={styles.lockedBadge}><Icon name="lock" size={10} /> Locked</span>
           )}
         </div>
         {thread.description && (
           <div className={styles.threadRowDesc}>{thread.description}</div>
         )}
-        <div className={styles.threadRowMeta}>
-          <span>Started by {thread.createdByName} · {new Date(thread.createdAt).toLocaleDateString()}</span>
-          {thread.lastPostDate && (
-            <span>
-              Last post {new Date(thread.lastPostDate).toLocaleDateString()}
-              {thread.lastPostUserName ? ` by ${thread.lastPostUserName}` : ""}
-            </span>
-          )}
-        </div>
       </div>
+
+      {/* Message count column */}
+      <div className={styles.threadRowMsgCountCol}>
+        <div className={styles.threadRowMetaLabel}>Posts</div>
+        <div className={styles.threadRowMsgCount}>{thread.messageCount}</div>
+      </div>
+
+      {/* Creator column */}
+      <div className={styles.threadRowCreatorCol}>
+        <div className={styles.threadRowMetaLabel}>Started by</div>
+        <div className={styles.threadRowMetaValue}>{thread.createdByName}</div>
+        {createdDate && <div className={styles.threadRowMetaDate}>{createdDate}</div>}
+      </div>
+
+      {/* Last post column */}
+      <div className={styles.threadRowLastPostCol}>
+        {thread.lastPostDate ? (
+          <>
+            <div className={styles.threadRowMetaLabel}>Last post</div>
+            {thread.lastPostUserName && (
+              <div className={styles.threadRowMetaValue}>{thread.lastPostUserName}</div>
+            )}
+            <div className={styles.threadRowMetaDate}>{new Date(thread.lastPostDate).toLocaleDateString()}</div>
+          </>
+        ) : (
+          <div className={styles.threadRowMetaDate} style={{ color: "#334155" }}>No replies</div>
+        )}
+      </div>
+
       {menuOptions.length > 0 && (
         <div className={styles.threadRowActions} onClick={(e) => e.stopPropagation()}>
           <ButtonMenu

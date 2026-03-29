@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ButtonIcon, ButtonMenu, Icon, ProfileIndicator } from "@applicator/sdk/components";
+import { ButtonIcon, Icon, ProfileIndicator, RichTextEditor, RichTextViewer } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
+import EditThreadModal from "./EditThreadModal";
 
 interface MessageSummary {
   id: string;
@@ -22,6 +23,7 @@ interface ThreadInfo {
   name: string;
   description: string;
   locked: boolean;
+  pinned: boolean;
   topicId: string;
   forumId: string;
   createdBy: string;
@@ -29,8 +31,8 @@ interface ThreadInfo {
 
 interface PageData {
   thread: ThreadInfo;
-  topic: { id: string; name: string };
-  forum: { id: string; name: string };
+  topic: { id: string; name: string; hasIcon?: boolean; locked?: boolean };
+  forum: { id: string; name: string; hasIcon?: boolean };
   access: string;
   currentUserId: string;
   messages: MessageSummary[];
@@ -42,15 +44,20 @@ interface PageData {
 interface Props {
   threadId: string;
   onBack: () => void;
+  onNavigateToForum: () => void;
+  onNavigateToTopic: () => void;
 }
 
-export default function ThreadDetail({ threadId, onBack }: Props) {
+export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNavigateToTopic }: Props) {
   const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [replyText, setReplyText] = useState("");
+  const [replyHtml, setReplyHtml] = useState("");
   const [replying, setReplying] = useState(false);
   const [replyError, setReplyError] = useState("");
+  const [editingThread, setEditingThread] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (p: number) => {
@@ -68,21 +75,25 @@ export default function ThreadDetail({ threadId, onBack }: Props) {
   const canModerate = data?.access === "owner" || data?.access === "moderator";
   const canPost = data?.access !== "viewer";
   const threadLocked = !!data?.thread.locked;
-  const canReply = canPost && (!threadLocked || canModerate);
+  const topicLocked = !!data?.topic.locked;
+  const canReply = canPost && (!threadLocked || canModerate) && (!topicLocked || canModerate);
+  const isCreator = data?.thread.createdBy === data?.currentUserId;
+  const canEdit = (isCreator || canModerate) && !!data;
+  const canDelete = (isCreator || canModerate) && !!data;
 
   const handleReply = async () => {
-    if (!replyText.trim()) return;
+    if (!replyHtml.trim()) return;
     setReplying(true);
     setReplyError("");
     try {
       const res = await fetch(`/api/forums/threads/${threadId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: replyText.trim() }),
+        body: JSON.stringify({ content: replyHtml }),
       });
       if (res.ok) {
         const msg = await res.json();
-        setReplyText("");
+        setReplyHtml("");
         setData((prev) => {
           if (!prev) return prev;
           return { ...prev, messages: [...prev.messages, msg], total: prev.total + 1 };
@@ -107,11 +118,7 @@ export default function ThreadDetail({ threadId, onBack }: Props) {
   const handleMessageDeleted = (msgId: string) => {
     setData((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        messages: prev.messages.filter((m) => m.id !== msgId),
-        total: prev.total - 1,
-      };
+      return { ...prev, messages: prev.messages.filter((m) => m.id !== msgId), total: prev.total - 1 };
     });
   };
 
@@ -120,9 +127,7 @@ export default function ThreadDetail({ threadId, onBack }: Props) {
       if (!prev) return prev;
       return {
         ...prev,
-        messages: prev.messages.map((m) =>
-          m.id === msgId ? { ...m, removed: true, content: "" } : m
-        ),
+        messages: prev.messages.map((m) => m.id === msgId ? { ...m, removed: true, content: "" } : m),
       };
     });
   };
@@ -140,6 +145,34 @@ export default function ThreadDetail({ threadId, onBack }: Props) {
     }
   };
 
+  const handleTogglePin = async () => {
+    if (!data) return;
+    const newPinned = !data.thread.pinned;
+    const res = await fetch(`/api/forums/threads/${threadId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned: newPinned }),
+    });
+    if (res.ok) {
+      setData((prev) => prev ? { ...prev, thread: { ...prev.thread, pinned: newPinned } } : prev);
+    }
+  };
+
+  const handleThreadUpdated = (updated: { id: string; name: string; description: string }) => {
+    setData((prev) => prev ? { ...prev, thread: { ...prev.thread, name: updated.name, description: updated.description } } : prev);
+    setEditingThread(false);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/forums/threads/${threadId}`, { method: "DELETE" });
+      if (res.ok) onBack();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading && !data) return <div className={styles.loading}>Loading messages…</div>;
   if (!data) return <div className={styles.loading}>Thread not found.</div>;
 
@@ -149,34 +182,106 @@ export default function ThreadDetail({ threadId, onBack }: Props) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <div className={styles.header}>
         <button className={styles.backBtn} onClick={onBack}>
-          <Icon name="chevron-left" size={14} /> Back
+          <Icon name="chevron-left" size={16} />
         </button>
+
+        {/* Forum icon + name — clickable */}
+        <div className={styles.headerNavLink} onClick={onNavigateToForum}>
+          {forum.hasIcon ? (
+            <img src={`/api/forums/icons/forums/${forum.id}`} alt="" className={styles.headerIcon} />
+          ) : (
+            <div className={styles.headerIconPlaceholder}><Icon name="users" size={14} /></div>
+          )}
+          <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500 }}>{forum.name}</span>
+        </div>
+
+        <span style={{ color: "#475569", margin: "0 4px", flexShrink: 0 }}>/</span>
+
+        {/* Topic icon + name — clickable */}
+        <div className={styles.headerNavLink} onClick={onNavigateToTopic}>
+          {topic.hasIcon ? (
+            <img src={`/api/forums/icons/topics/${topic.id}`} alt="" className={styles.headerIcon} />
+          ) : (
+            <div className={styles.headerIconPlaceholder}><Icon name="list-view" size={14} /></div>
+          )}
+          <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500 }}>{topic.name}</span>
+        </div>
 
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
           <span className={styles.headerTitle} style={{ fontSize: 14 }}>
             {thread.name}
             {thread.locked && (
               <span className={styles.lockedBadge} style={{ marginLeft: 8 }}>
-                <Icon name="square-stop" size={10} /> Locked
+                <Icon name="lock" size={10} /> Locked
               </span>
             )}
-          </span>
-          <span style={{ fontSize: 11, color: "#64748b" }}>
-            {forum.name} › {topic.name}
           </span>
         </div>
 
         <div className={styles.headerActions}>
-          {canModerate && (
-            <ButtonIcon
-              name="square-stop"
-              iconSize={14}
-              label={thread.locked ? "Unlock thread" : "Lock thread"}
-              onClick={handleToggleLock}
-              active={thread.locked}
-              subvariant="warning"
-              placement="bottom"
-            />
+          {confirmDelete ? (
+            <>
+              <span style={{ fontSize: 12, color: "#ef4444", flexShrink: 0 }}>Delete?</span>
+              <ButtonIcon
+                name="trash"
+                iconSize={14}
+                label={deleting ? "Deleting…" : "Confirm delete"}
+                onClick={handleDelete}
+                active
+                subvariant="danger"
+                placement="bottom"
+              />
+              <ButtonIcon
+                name="close"
+                iconSize={14}
+                label="Cancel"
+                onClick={() => setConfirmDelete(false)}
+                placement="bottom"
+              />
+            </>
+          ) : (
+            <>
+              {canEdit && (
+                <ButtonIcon
+                  name="edit"
+                  iconSize={14}
+                  label="Edit thread"
+                  onClick={() => setEditingThread(true)}
+                  placement="bottom"
+                />
+              )}
+              {canModerate && (
+                <ButtonIcon
+                  name="pin"
+                  iconSize={14}
+                  label={thread.pinned ? "Unpin thread" : "Pin thread"}
+                  onClick={handleTogglePin}
+                  active={thread.pinned}
+                  placement="bottom"
+                />
+              )}
+              {canModerate && (
+                <ButtonIcon
+                  name={thread.locked ? "unlock" : "lock"}
+                  iconSize={14}
+                  label={thread.locked ? "Unlock thread" : "Lock thread"}
+                  onClick={handleToggleLock}
+                  active={thread.locked}
+                  subvariant="warning"
+                  placement="bottom"
+                />
+              )}
+              {canDelete && (
+                <ButtonIcon
+                  name="trash"
+                  iconSize={14}
+                  label="Delete thread"
+                  onClick={() => setConfirmDelete(true)}
+                  subvariant="danger"
+                  placement="bottom"
+                />
+              )}
+            </>
           )}
         </div>
       </div>
@@ -229,47 +334,44 @@ export default function ThreadDetail({ threadId, onBack }: Props) {
 
       <div className={styles.footer}>
         {canReply ? (
-          <div className={styles.replyEditor}>
-            {replyError && (
-              <div style={{ color: "#ef4444", fontSize: 12 }}>{replyError}</div>
-            )}
-            <textarea
-              className={styles.formTextarea}
-              style={{ minHeight: 60 }}
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Write a reply…"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleReply();
-              }}
-            />
-            <div className={styles.replyActions}>
+          <div className={styles.replyEditorRow}>
+            <div style={{ flex: 1 }}>
+              {replyError && (
+                <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 6 }}>{replyError}</div>
+              )}
+              <RichTextEditor
+                value={replyHtml}
+                onChange={setReplyHtml}
+                placeholder="Write a reply…"
+                minHeight={100}
+                disabled={replying}
+              />
+            </div>
+            <div className={styles.replyPostBtn}>
               <button
-                style={{
-                  background: "#3b82f6",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 6,
-                  padding: "6px 14px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: replying || !replyText.trim() ? "not-allowed" : "pointer",
-                  opacity: replying || !replyText.trim() ? 0.5 : 1,
-                }}
+                className={styles.postReplyBtn}
                 onClick={handleReply}
-                disabled={replying || !replyText.trim()}
+                disabled={replying || !replyHtml.trim()}
               >
-                {replying ? "Posting…" : "Post Reply"}
+                {replying ? "Posting…" : "Post"}
               </button>
             </div>
           </div>
         ) : (
           <div className={styles.lockedNotice}>
-            <Icon name="square-stop" size={14} />
-            {threadLocked ? "This thread is locked." : "You do not have permission to reply."}
+            <Icon name={threadLocked || topicLocked ? "lock" : "square-stop"} size={14} />
+            {topicLocked ? "This topic is locked." : threadLocked ? "This thread is locked." : "You do not have permission to reply."}
           </div>
         )}
       </div>
+
+      {editingThread && data && (
+        <EditThreadModal
+          thread={{ id: threadId, name: thread.name, description: thread.description }}
+          onClose={() => setEditingThread(false)}
+          onUpdated={handleThreadUpdated}
+        />
+      )}
     </div>
   );
 }
@@ -292,35 +394,24 @@ function MessageRow({
   onRemoved: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState(message.content);
+  const [editHtml, setEditHtml] = useState(message.content);
   const [saving, setSaving] = useState(false);
 
   const isAuthor = message.authorId === currentUserId;
   const canEdit = (isAuthor || canModerate) && !message.removed && (!threadLocked || canModerate);
   const canDelete = (isAuthor || canModerate) && !message.removed && (!threadLocked || canModerate);
 
-  const menuOptions: any[] = [];
-  if (canEdit) menuOptions.push({ label: "Edit", icon: "edit", onClick: () => { setEditText(message.content); setEditing(true); } });
-  if (canDelete) {
-    if (menuOptions.length > 0) menuOptions.push({ type: "separator" as const });
-    if (canModerate && !isAuthor) {
-      menuOptions.push({ label: "Remove", icon: "trash", onClick: handleRemove, variant: "danger" as const });
-    } else {
-      menuOptions.push({ label: "Delete", icon: "trash", onClick: handleDelete, variant: "danger" as const });
-    }
-  }
-
   async function handleSaveEdit() {
-    if (!editText.trim()) return;
+    if (!editHtml.trim()) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/forums/messages/${message.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editText.trim() }),
+        body: JSON.stringify({ content: editHtml }),
       });
       if (res.ok) {
-        onUpdated({ ...message, content: editText.trim(), edited: true, editedAt: Date.now() });
+        onUpdated({ ...message, content: editHtml, edited: true, editedAt: Date.now() });
         setEditing(false);
       }
     } finally {
@@ -340,31 +431,20 @@ function MessageRow({
 
   return (
     <div className={styles.messageRow}>
-      <div className={styles.messageLeft}>
-        <ProfileIndicator
-          displayName={message.authorName || "?"}
-          profilePicture={message.profilePicture || undefined}
-          size={36}
-        />
-        <div className={styles.messageAuthorName}>{message.authorName || "Unknown"}</div>
-      </div>
-
       <div className={styles.messageRight}>
         <div className={styles.messageSubheader}>
-          <span>{new Date(message.createdAt).toLocaleString()}</span>
+          {!message.removed && (
+            <span style={{ cursor: "default", pointerEvents: "none" }}>
+              <ProfileIndicator
+                displayName={message.authorName || "?"}
+                profilePicture={message.profilePicture || undefined}
+                size={18}
+              />
+            </span>
+          )}
+          <span>{message.createdAt ? new Date(message.createdAt).toLocaleString() : ""}</span>
           {message.edited && !message.removed && (
             <span style={{ color: "#475569" }}>· edited</span>
-          )}
-          {menuOptions.length > 0 && !editing && (
-            <div className={styles.messageSubheaderActions} onClick={(e) => e.stopPropagation()}>
-              <ButtonMenu
-                trigger={
-                  <span style={{ fontSize: 16, color: "#64748b", padding: "0 4px", cursor: "pointer" }}>⋯</span>
-                }
-                options={menuOptions}
-                alignment="right"
-              />
-            </div>
           )}
         </div>
 
@@ -372,12 +452,11 @@ function MessageRow({
           <div className={styles.messageRemoved}>This message was removed by a moderator.</div>
         ) : editing ? (
           <div className={styles.messageEditingArea}>
-            <textarea
-              className={styles.formTextarea}
-              style={{ minHeight: 80 }}
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              autoFocus
+            <RichTextEditor
+              value={editHtml}
+              onChange={setEditHtml}
+              minHeight={80}
+              disabled={saving}
             />
             <div className={styles.messageEditActions}>
               <button
@@ -403,19 +482,22 @@ function MessageRow({
                   padding: "4px 10px",
                   fontSize: 12,
                   fontWeight: 600,
-                  cursor: saving || !editText.trim() ? "not-allowed" : "pointer",
-                  opacity: saving || !editText.trim() ? 0.5 : 1,
+                  cursor: saving || !editHtml.trim() ? "not-allowed" : "pointer",
+                  opacity: saving || !editHtml.trim() ? 0.5 : 1,
                 }}
                 onClick={handleSaveEdit}
-                disabled={saving || !editText.trim()}
+                disabled={saving || !editHtml.trim()}
               >
                 {saving ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
         ) : (
-          <div className={styles.messageContent} style={{ whiteSpace: "pre-wrap" }}>
-            {message.content}
+          <div className={styles.messageContent}>
+            <RichTextViewer
+              html={message.content}
+              style={{ fontSize: "14px", color: "#cbd5e1", lineHeight: "1.6" }}
+            />
           </div>
         )}
       </div>
