@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Icon, Button, DrawerLayout, ProfileIndicator, SearchableCombobox } from "@applicator/sdk/components";
+import {
+  Icon,
+  Button,
+  DrawerLayout,
+  ProfileIndicator,
+  SearchableCombobox,
+} from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
 import { SystemUser } from "@/src/types/SystemUser";
 
@@ -28,18 +34,36 @@ interface Props {
   onDeleted: () => void;
 }
 
-export default function ForumSettings({ forum, onBack, onUpdated, onDeleted }: Props) {
-  const [activeTab, setActiveTab] = useState<"general" | "members" | "delete">("general");
+export default function ForumSettings({
+  forum,
+  onBack,
+  onUpdated,
+  onDeleted,
+}: Props) {
+  const [activeTab, setActiveTab] = useState<"general" | "members" | "delete">(
+    "general",
+  );
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const tabs: { id: "general" | "members" | "delete"; label: string; danger?: boolean }[] = [
+  const tabs: {
+    id: "general" | "members" | "delete";
+    label: string;
+    danger?: boolean;
+  }[] = [
     { id: "general", label: "General" },
     { id: "members", label: "Members" },
     { id: "delete", label: "Delete", danger: true },
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       {/* Header */}
       <div className={styles.header}>
         <button className={styles.backBtn} onClick={onBack}>
@@ -47,9 +71,15 @@ export default function ForumSettings({ forum, onBack, onUpdated, onDeleted }: P
         </button>
 
         {forum.hasIcon ? (
-          <img src={`/api/forums/icons/forums/${forum.id}`} alt="" className={styles.headerIcon} />
+          <img
+            src={`/api/forums/icons/forums/${forum.id}`}
+            alt=""
+            className={styles.headerIcon}
+          />
         ) : (
-          <div className={styles.headerIconPlaceholder}><Icon name="users" size={14} /></div>
+          <div className={styles.headerIconPlaceholder}>
+            <Icon name="users" size={14} />
+          </div>
         )}
 
         <span className={styles.headerTitle}>
@@ -60,6 +90,7 @@ export default function ForumSettings({ forum, onBack, onUpdated, onDeleted }: P
 
       {/* DrawerLayout fills remaining height */}
       <DrawerLayout
+        rounded={false}
         style={{ flex: 1, minHeight: 0 }}
         leftPanel={{
           open: sidebarOpen,
@@ -82,7 +113,9 @@ export default function ForumSettings({ forum, onBack, onUpdated, onDeleted }: P
                     styles.settingsNavItem,
                     activeTab === tab.id ? styles.settingsNavItemActive : "",
                     tab.danger ? styles.settingsNavItemDanger : "",
-                  ].filter(Boolean).join(" ")}
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   onClick={() => setActiveTab(tab.id)}
                 >
                   {tab.label}
@@ -96,9 +129,7 @@ export default function ForumSettings({ forum, onBack, onUpdated, onDeleted }: P
           {activeTab === "general" && (
             <GeneralTab forum={forum} onUpdated={onUpdated} />
           )}
-          {activeTab === "members" && (
-            <MembersTab forumId={forum.id} />
-          )}
+          {activeTab === "members" && <MembersTab forumId={forum.id} />}
           {activeTab === "delete" && (
             <DeleteTab forum={forum} onDeleted={onDeleted} />
           )}
@@ -139,7 +170,10 @@ function GeneralTab({
       const patchRes = await fetch(`/api/forums/forums/${forum.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim(),
+        }),
       });
       if (!patchRes.ok) {
         const err = await patchRes.json();
@@ -151,12 +185,19 @@ function GeneralTab({
       if (pendingIcon) {
         const formData = new FormData();
         formData.append("file", pendingIcon);
-        await fetch(`/api/forums/forums/${forum.id}/icon`, { method: "POST", body: formData });
+        await fetch(`/api/forums/forums/${forum.id}/icon`, {
+          method: "POST",
+          body: formData,
+        });
         hasIcon = true;
         setPendingIcon(null);
       }
 
-      onUpdated({ name: name.trim(), description: description.trim(), hasIcon });
+      onUpdated({
+        name: name.trim(),
+        description: description.trim(),
+        hasIcon,
+      });
     } finally {
       setSaving(false);
     }
@@ -164,7 +205,11 @@ function GeneralTab({
 
   return (
     <div style={{ maxWidth: 480 }}>
-      {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
 
       <div className={styles.formRow}>
         <label className={styles.formLabel}>Icon</label>
@@ -176,7 +221,10 @@ function GeneralTab({
               <span style={{ fontSize: 11, color: "#475569" }}>None</span>
             </div>
           )}
-          <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
+          <Button
+            variant="secondary"
+            onClick={() => fileInputRef.current?.click()}
+          >
             Choose Image
           </Button>
           <input
@@ -219,7 +267,9 @@ function MembersTab({ forumId }: { forumId: string }) {
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
-  const [selectedRole, setSelectedRole] = useState<"moderator" | "member" | "viewer">("member");
+  const [selectedRole, setSelectedRole] = useState<
+    "moderator" | "member" | "viewer"
+  >("member");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
 
@@ -271,12 +321,18 @@ function MembersTab({ forumId }: { forumId: string }) {
     });
     if (res.ok) {
       const data = await res.json();
-      setShares((prev) => prev.map((s) => s.id === shareId ? { ...s, id: data.id, role: newRole as any } : s));
+      setShares((prev) =>
+        prev.map((s) =>
+          s.id === shareId ? { ...s, id: data.id, role: newRole as any } : s,
+        ),
+      );
     }
   };
 
   const handleRevoke = async (shareId: string) => {
-    const res = await fetch(`/api/forums/forums/${forumId}/shares/${shareId}`, { method: "DELETE" });
+    const res = await fetch(`/api/forums/forums/${forumId}/shares/${shareId}`, {
+      method: "DELETE",
+    });
     if (res.ok) setShares((prev) => prev.filter((s) => s.id !== shareId));
   };
 
@@ -285,9 +341,20 @@ function MembersTab({ forumId }: { forumId: string }) {
 
   return (
     <div style={{ maxWidth: 520 }}>
-      {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 10 }}>{error}</div>}
+      {error && (
+        <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 10 }}>
+          {error}
+        </div>
+      )}
 
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-start",
+          marginBottom: 20,
+        }}
+      >
         <div style={{ flex: 1 }}>
           <SearchableCombobox<SystemUser>
             items={availableUsers}
@@ -295,8 +362,13 @@ function MembersTab({ forumId }: { forumId: string }) {
             onSelectionChange={(sel) => setSelectedUser(sel[0] ?? null)}
             renderItem={(u) => (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <ProfileIndicator displayName={u.displayName} profilePicture={u.profilePicture || undefined} />
-                <span style={{ fontSize: 11, color: "#64748b" }}>@{u.username}</span>
+                <ProfileIndicator
+                  displayName={u.displayName}
+                  profilePicture={u.profilePicture || undefined}
+                />
+                <span style={{ fontSize: 11, color: "#64748b" }}>
+                  @{u.username}
+                </span>
               </div>
             )}
             filterItem={(u, term) =>
@@ -317,7 +389,11 @@ function MembersTab({ forumId }: { forumId: string }) {
           <option value="member">Member</option>
           <option value="viewer">Viewer</option>
         </select>
-        <Button variant="primary" onClick={handleAdd} disabled={!selectedUser || adding}>
+        <Button
+          variant="primary"
+          onClick={handleAdd}
+          disabled={!selectedUser || adding}
+        >
           {adding ? "Adding…" : "Add"}
         </Button>
       </div>
@@ -360,7 +436,13 @@ function MembersTab({ forumId }: { forumId: string }) {
   );
 }
 
-function DeleteTab({ forum, onDeleted }: { forum: ForumData; onDeleted: () => void }) {
+function DeleteTab({
+  forum,
+  onDeleted,
+}: {
+  forum: ForumData;
+  onDeleted: () => void;
+}) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -368,7 +450,9 @@ function DeleteTab({ forum, onDeleted }: { forum: ForumData; onDeleted: () => vo
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/forums/forums/${forum.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/forums/forums/${forum.id}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
         onDeleted();
       } else {
@@ -383,19 +467,41 @@ function DeleteTab({ forum, onDeleted }: { forum: ForumData; onDeleted: () => vo
 
   return (
     <div style={{ maxWidth: 480 }}>
-      <div className={styles.dangerZoneTitle} style={{ marginBottom: 8 }}>Delete Forum</div>
-      <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20, lineHeight: 1.6 }}>
-        This will permanently delete the forum, all sections, topics, threads, and messages.
-        This action cannot be undone.
+      <div className={styles.dangerZoneTitle} style={{ marginBottom: 8 }}>
+        Delete Forum
+      </div>
+      <p
+        style={{
+          fontSize: 13,
+          color: "#94a3b8",
+          marginBottom: 20,
+          lineHeight: 1.6,
+        }}
+      >
+        This will permanently delete the forum, all sections, topics, threads,
+        and messages. This action cannot be undone.
       </p>
-      {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
       {confirmDelete ? (
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           <span style={{ fontSize: 13, color: "#94a3b8" }}>Are you sure?</span>
           <Button variant="danger" onClick={handleDelete} disabled={deleting}>
             {deleting ? "Deleting…" : "Yes, Delete"}
           </Button>
-          <Button variant="secondary" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button variant="secondary" onClick={() => setConfirmDelete(false)}>
+            Cancel
+          </Button>
         </div>
       ) : (
         <Button variant="danger" onClick={() => setConfirmDelete(true)}>

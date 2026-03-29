@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { ButtonIcon, Icon, ButtonMenu, ProfileIndicator } from "@applicator/sdk/components";
+import { ButtonIcon, Icon } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
 import NewThreadModal from "./NewThreadModal";
-import EditThreadModal from "./EditThreadModal";
 
 interface ThreadSummary {
   id: string;
@@ -55,7 +54,6 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [showNewThread, setShowNewThread] = useState(false);
-  const [editingThread, setEditingThread] = useState<ThreadSummary | null>(null);
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
@@ -75,58 +73,6 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
   const handleThreadCreated = (thread: any) => {
     setShowNewThread(false);
     onNavigateToThread(thread.id);
-  };
-
-  const handleThreadUpdated = (updated: ThreadSummary) => {
-    setData((prev) => {
-      if (!prev) return prev;
-      const updateList = (list: ThreadSummary[]) =>
-        list.map((t) => (t.id === updated.id ? { ...t, name: updated.name, description: updated.description } : t));
-      return { ...prev, pinned: updateList(prev.pinned), threads: updateList(prev.threads) };
-    });
-    setEditingThread(null);
-  };
-
-  const handleThreadDelete = async (threadId: string) => {
-    const res = await fetch(`/api/forums/threads/${threadId}`, { method: "DELETE" });
-    if (res.ok) {
-      setData((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          pinned: prev.pinned.filter((t) => t.id !== threadId),
-          threads: prev.threads.filter((t) => t.id !== threadId),
-          total: prev.total - 1,
-        };
-      });
-    }
-  };
-
-  const handleTogglePin = async (thread: ThreadSummary) => {
-    const res = await fetch(`/api/forums/threads/${thread.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pinned: !thread.pinned }),
-    });
-    if (res.ok) {
-      load(page);
-    }
-  };
-
-  const handleToggleLock = async (thread: ThreadSummary) => {
-    const res = await fetch(`/api/forums/threads/${thread.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ locked: !thread.locked }),
-    });
-    if (res.ok) {
-      setData((prev) => {
-        if (!prev) return prev;
-        const updateList = (list: ThreadSummary[]) =>
-          list.map((t) => t.id === thread.id ? { ...t, locked: !thread.locked } : t);
-        return { ...prev, pinned: updateList(prev.pinned), threads: updateList(prev.threads) };
-      });
-    }
   };
 
   const handleTopicLock = async () => {
@@ -214,13 +160,7 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
               <ThreadRowItem
                 key={t.id}
                 thread={t}
-                currentUserId={data.currentUserId}
-                canModerate={canModerate}
                 onClick={() => onNavigateToThread(t.id)}
-                onEdit={() => setEditingThread(t)}
-                onDelete={() => handleThreadDelete(t.id)}
-                onTogglePin={() => handleTogglePin(t)}
-                onToggleLock={() => handleToggleLock(t)}
               />
             ))}
           </div>
@@ -242,13 +182,7 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
             <ThreadRowItem
               key={t.id}
               thread={t}
-              currentUserId={data.currentUserId}
-              canModerate={canModerate}
               onClick={() => onNavigateToThread(t.id)}
-              onEdit={() => setEditingThread(t)}
-              onDelete={() => handleThreadDelete(t.id)}
-              onTogglePin={() => handleTogglePin(t)}
-              onToggleLock={() => handleToggleLock(t)}
             />
           ))}
         </div>
@@ -280,53 +214,17 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
         />
       )}
 
-      {editingThread && (
-        <EditThreadModal
-          thread={editingThread}
-          onClose={() => setEditingThread(null)}
-          onUpdated={handleThreadUpdated}
-        />
-      )}
     </>
   );
 }
 
 function ThreadRowItem({
   thread,
-  currentUserId,
-  canModerate,
   onClick,
-  onEdit,
-  onDelete,
-  onTogglePin,
-  onToggleLock,
 }: {
   thread: ThreadSummary;
-  currentUserId: string;
-  canModerate: boolean;
   onClick: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onTogglePin: () => void;
-  onToggleLock: () => void;
 }) {
-  const isCreator = thread.createdBy === currentUserId;
-  const canEdit = canModerate || isCreator;
-  const canDelete = canModerate || isCreator;
-
-  const menuOptions: any[] = [];
-  if (canEdit) menuOptions.push({ label: "Edit", icon: "edit", onClick: onEdit });
-  if (canModerate) {
-    menuOptions.push({ label: thread.pinned ? "Unpin" : "Pin", icon: "pin", onClick: onTogglePin });
-    menuOptions.push({ label: thread.locked ? "Unlock" : "Lock", icon: thread.locked ? "unlock" : "lock", onClick: onToggleLock });
-  }
-  if (menuOptions.length > 0 && canDelete) {
-    menuOptions.push({ type: "separator" as const });
-  }
-  if (canDelete) {
-    menuOptions.push({ label: "Delete", icon: "trash", onClick: onDelete, variant: "danger" as const });
-  }
-
   const createdDate = thread.createdAt ? new Date(thread.createdAt).toLocaleDateString() : "";
 
   return (
@@ -373,17 +271,6 @@ function ThreadRowItem({
         )}
       </div>
 
-      {menuOptions.length > 0 && (
-        <div className={styles.threadRowActions} onClick={(e) => e.stopPropagation()}>
-          <ButtonMenu
-            trigger={
-              <span style={{ fontSize: 18, color: "#64748b", padding: "0 4px", cursor: "pointer" }}>⋯</span>
-            }
-            options={menuOptions}
-            alignment="right"
-          />
-        </div>
-      )}
     </div>
   );
 }

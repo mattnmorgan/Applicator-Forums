@@ -125,10 +125,7 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
   const handleMessageRemoved = (msgId: string) => {
     setData((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        messages: prev.messages.map((m) => m.id === msgId ? { ...m, removed: true, content: "" } : m),
-      };
+      return { ...prev, messages: prev.messages.map((m) => m.id === msgId ? { ...m, removed: true, content: "" } : m) };
     });
   };
 
@@ -206,6 +203,8 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
           )}
           <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500 }}>{topic.name}</span>
         </div>
+
+        <span style={{ color: "#475569", margin: "0 4px", flexShrink: 0 }}>/</span>
 
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
           <span className={styles.headerTitle} style={{ fontSize: 14 }}>
@@ -393,13 +392,12 @@ function MessageRow({
   onDeleted: (id: string) => void;
   onRemoved: (id: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [editHtml, setEditHtml] = useState(message.content);
-  const [saving, setSaving] = useState(false);
-
   const isAuthor = message.authorId === currentUserId;
   const canEdit = (isAuthor || canModerate) && !message.removed && (!threadLocked || canModerate);
   const canDelete = (isAuthor || canModerate) && !message.removed && (!threadLocked || canModerate);
+  const [editing, setEditing] = useState(false);
+  const [editHtml, setEditHtml] = useState(message.content);
+  const [saving, setSaving] = useState(false);
 
   async function handleSaveEdit() {
     if (!editHtml.trim()) return;
@@ -445,6 +443,29 @@ function MessageRow({
           <span>{message.createdAt ? new Date(message.createdAt).toLocaleString() : ""}</span>
           {message.edited && !message.removed && (
             <span style={{ color: "#475569" }}>· edited</span>
+          )}
+          {(canEdit || canDelete) && !editing && (
+            <div className={styles.messageSubheaderActions} onClick={(e) => e.stopPropagation()}>
+              {canEdit && (
+                <ButtonIcon
+                  name="edit"
+                  iconSize={12}
+                  label="Edit post"
+                  onClick={() => { setEditHtml(message.content); setEditing(true); }}
+                  placement="top"
+                />
+              )}
+              {canDelete && (
+                <ButtonIcon
+                  name="trash"
+                  iconSize={12}
+                  label={canModerate && !isAuthor ? "Remove post" : "Delete post"}
+                  onClick={canModerate && !isAuthor ? handleRemove : handleDelete}
+                  subvariant="danger"
+                  placement="top"
+                />
+              )}
+            </div>
           )}
         </div>
 
