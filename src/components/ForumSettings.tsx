@@ -420,7 +420,12 @@ function MembersTab({
                   </td>
                 </tr>
               ) : (
-                shares.map((share) => (
+                [...shares].sort((a, b) => {
+                  if (a.type !== b.type) return a.type === "user" ? -1 : 1;
+                  const aName = a.type === "user" ? (a.displayName || "") : (a.authorityName || "");
+                  const bName = b.type === "user" ? (b.displayName || "") : (b.authorityName || "");
+                  return aName.localeCompare(bName);
+                }).map((share) => (
                   <tr key={share.id} className={styles.shareRow}>
                     <td className={styles.shareRowCell}>
                       {share.type === "user" ? (
