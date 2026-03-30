@@ -52,6 +52,7 @@ export default function Forums({ context }: Props) {
             )
           }
           onDeleted={() => setNav({ view: "list" })}
+          onOwnershipTransferred={() => setNav({ view: "forum", forumId: nav.forumId })}
         />
       )}
       {nav.view === "topic" && (

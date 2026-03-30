@@ -3,7 +3,13 @@ import { ApiContext } from "@applicator/sdk/context";
 import { ForumRecord } from "@/src/types/ForumRecord";
 import { SectionRecord } from "@/src/types/SectionRecord";
 import { TopicRecord } from "@/src/types/TopicRecord";
-import { getForumAccess, canModerate, deleteAllForumShares } from "@/src/lib/forum-access";
+import {
+  getForumAccess,
+  canModerate,
+  deleteAllForumShares,
+  getUserAuthorityId,
+  canUserAccessTopic,
+} from "@/src/lib/forum-access";
 
 // GET /api/forums/forums/:forumId — get forum detail with sections and topics
 export async function GET(
@@ -24,35 +30,55 @@ export async function GET(
     topics.readRecords({ fields: { forumId }, limit: 500 }),
   ]);
 
+  const userAuthorityId = canModerate(access.level)
+    ? null
+    : await getUserAuthorityId(context, access.userId);
+
   const sortedSections = sectionsResult.records
     .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
 
-  // Enrich topics with lastPostUser display name and profile picture
-  const enrichedTopics = await Promise.all(
-    topicsResult.records.map(async (t) => {
-      let lastPostUserName: string | null = null;
-      let lastPostUserProfilePicture: string | null = null;
-      if (t.data.lastPostUserId) {
-        const u = await userMgr.readRecord(t.data.lastPostUserId) as any;
-        lastPostUserName = u?.data.display_name || u?.data.username || null;
-        lastPostUserProfilePicture = u?.data.icon
-          ? `/api/system/assets/icons/users/${t.data.lastPostUserId}` : null;
-      }
-      return {
-        id: t.id,
-        name: t.data.name,
-        description: t.data.description || "",
-        hasIcon: !!t.data.hasIcon,
-        sectionId: t.data.sectionId || null,
-        order: t.data.order ?? 0,
-        locked: !!t.data.locked,
-        lastPostDate: t.data.lastPostDate || null,
-        lastPostUserId: t.data.lastPostUserId || null,
-        lastPostUserName,
-        lastPostUserProfilePicture,
-      };
-    }),
-  );
+  // Enrich topics with lastPostUser info; filter restricted topics the user can't access
+  const enrichedTopics = (
+    await Promise.all(
+      topicsResult.records.map(async (t) => {
+        // Filter restricted topics
+        if (t.data.restricted) {
+          const allowed = await canUserAccessTopic(
+            context,
+            t.id,
+            access.userId,
+            userAuthorityId,
+            access.level,
+          );
+          if (!allowed) return null;
+        }
+
+        let lastPostUserName: string | null = null;
+        let lastPostUserProfilePicture: string | null = null;
+        if (t.data.lastPostUserId) {
+          const u = await userMgr.readRecord(t.data.lastPostUserId) as any;
+          lastPostUserName = u?.data.display_name || u?.data.username || null;
+          lastPostUserProfilePicture = u?.data.icon
+            ? `/api/system/assets/icons/users/${t.data.lastPostUserId}` : null;
+        }
+
+        return {
+          id: t.id,
+          name: t.data.name,
+          description: t.data.description || "",
+          hasIcon: !!t.data.hasIcon,
+          sectionId: t.data.sectionId || null,
+          order: t.data.order ?? 0,
+          locked: !!t.data.locked,
+          restricted: !!t.data.restricted,
+          lastPostDate: t.data.lastPostDate || null,
+          lastPostUserId: t.data.lastPostUserId || null,
+          lastPostUserName,
+          lastPostUserProfilePicture,
+        };
+      }),
+    )
+  ).filter(Boolean) as NonNullable<(typeof enrichedTopics)[number]>[];
 
   const sortedTopics = enrichedTopics.sort((a, b) => a.order - b.order);
 
@@ -129,7 +155,6 @@ export async function DELETE(
       await forums.deleteRecord(forumId, { client });
     });
 
-    // Delete shares and icon outside transaction
     await deleteAllForumShares(context, forumId);
 
     try {

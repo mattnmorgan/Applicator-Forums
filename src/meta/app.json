@@ -3,8 +3,8 @@
   "name": "Forums",
   "version": {
     "major": 1,
-    "minor": 2,
-    "dev": 4
+    "minor": 3,
+    "dev": 0
   },
   "author": "Matthew Morgan",
   "contactEmail": "matthew@morgantech.info",
@@ -109,6 +109,11 @@
           "name": "locked",
           "type": "boolean",
           "description": "Locked topics prevent new threads and posts"
+        },
+        {
+          "name": "restricted",
+          "type": "boolean",
+          "description": "Restricted topics are only accessible to explicitly granted users/authorities"
         },
         {
           "name": "lastPostDate",
@@ -412,6 +417,26 @@
       "path": "users",
       "method": "GET",
       "description": "List active users"
+    },
+    {
+      "path": "authorities",
+      "method": "GET",
+      "description": "List system authorities for grant UI"
+    },
+    {
+      "path": "topics/[topic-id]/access",
+      "method": "GET",
+      "description": "List topic access entries"
+    },
+    {
+      "path": "topics/[topic-id]/access",
+      "method": "POST",
+      "description": "Add a topic access entry"
+    },
+    {
+      "path": "topics/[topic-id]/access/[access-id]",
+      "method": "DELETE",
+      "description": "Remove a topic access entry"
     }
   ],
   "agents": [],

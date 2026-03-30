@@ -26,6 +26,7 @@ export async function GET(
     forumId: topic.data.forumId,
     forumName: access.forum.data.name,
     locked: !!topic.data.locked,
+    restricted: !!topic.data.restricted,
     access: access.level,
     currentUserId: access.userId,
   });
@@ -56,6 +57,7 @@ export async function PATCH(
     if (body.sectionId !== undefined) updates.sectionId = body.sectionId || null;
     if (body.order !== undefined) updates.order = body.order;
     if (body.locked !== undefined) updates.locked = !!body.locked;
+    if (body.restricted !== undefined) updates.restricted = !!body.restricted;
 
     const table = await topics.getTable();
     const updated = await topics.updateRecord(table, topicId, updates);

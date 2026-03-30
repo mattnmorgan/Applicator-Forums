@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApiContext } from "@applicator/sdk/context";
-import { getForumAccess, canModerate, deleteForumShare } from "@/src/lib/forum-access";
+import { ForumRecord } from "@/src/types/ForumRecord";
+import { getForumAccess, canModerate, deleteForumShare, createForumShare } from "@/src/lib/forum-access";
 
-// PATCH /api/forums/forums/:forumId/shares/:shareId — update a share role
+// PATCH /api/forums/forums/:forumId/shares/:shareId — update role or transfer ownership
 export async function PATCH(
   req: NextRequest,
   context: ApiContext,
@@ -17,14 +18,41 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    if (!body.role || !["moderator", "member", "viewer"].includes(body.role)) {
-      return NextResponse.json({ error: "role must be moderator, member, or viewer" }, { status: 400 });
-    }
-
-    // Delete the old CA and create a new one with the updated role
     const caManager = (context as any).contextualAuthorityManager;
     const existingCA = await caManager.readRecord(shareId) as any;
     if (!existingCA) return NextResponse.json({ error: "Share not found" }, { status: 404 });
+
+    // Ownership transfer — owner only, user-scoped shares only
+    if (body.promote) {
+      if (access.level !== "owner") {
+        return NextResponse.json({ error: "Only the owner can transfer ownership" }, { status: 403 });
+      }
+      if (!existingCA.data.user) {
+        return NextResponse.json({ error: "Can only promote individual users to owner" }, { status: 400 });
+      }
+
+      const newOwnerId = existingCA.data.user;
+      const oldOwnerId = access.userId;
+
+      const forums = context.recordManager<ForumRecord>("forums", "forum");
+      const table = await forums.getTable();
+
+      // Transfer ownership and update shares in a transaction-like sequence
+      await forums.updateRecord(table, forumId, { ownerId: newOwnerId });
+
+      // Remove promoted user's member CA
+      await caManager.deleteContextualAuthority(shareId);
+
+      // Create a moderator CA for the old owner
+      await createForumShare(context, forumId, oldOwnerId, "moderator", newOwnerId);
+
+      return NextResponse.json({ success: true, newOwnerId });
+    }
+
+    // Role change
+    if (!body.role || !["moderator", "member", "viewer"].includes(body.role)) {
+      return NextResponse.json({ error: "role must be moderator, member, or viewer" }, { status: 400 });
+    }
 
     await caManager.deleteContextualAuthority(shareId);
 
@@ -34,14 +62,26 @@ export async function PATCH(
       viewer: "forums:forum-viewer",
     };
 
-    const newCA = await caManager.createUserContextualAuthority({
-      app: "forums",
-      recordId: `forum-${forumId}`,
-      permission: permMap[body.role],
-      user: existingCA.data.user,
-      createdBy: access.userId,
-      context: JSON.stringify({ forumId, role: body.role }),
-    });
+    let newCA: any;
+    if (existingCA.data.user) {
+      newCA = await caManager.createUserContextualAuthority({
+        app: "forums",
+        recordId: `forum-${forumId}`,
+        permission: permMap[body.role],
+        user: existingCA.data.user,
+        createdBy: access.userId,
+        context: JSON.stringify({ forumId, role: body.role }),
+      });
+    } else {
+      newCA = await caManager.createAuthorityContextualAuthority({
+        app: "forums",
+        recordId: `forum-${forumId}`,
+        permission: permMap[body.role],
+        authority: existingCA.data.authority,
+        createdBy: access.userId,
+        context: JSON.stringify({ forumId, role: body.role }),
+      });
+    }
 
     return NextResponse.json({ id: newCA.id, role: body.role });
   } catch (error: any) {

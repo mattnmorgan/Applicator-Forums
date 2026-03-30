@@ -13,6 +13,7 @@ interface TopicSummary {
   sectionId: string | null;
   order: number;
   locked: boolean;
+  restricted: boolean;
   lastPostDate: number | null;
   lastPostUserName: string | null;
   lastPostUserProfilePicture: string | null;
@@ -131,6 +132,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
         sectionId: data.sectionId || null,
         order: data.order ?? 0,
         locked: false,
+        restricted: false,
         lastPostDate: null,
         lastPostUserName: null,
         lastPostUserProfilePicture: null,
@@ -552,6 +554,9 @@ function TopicRowItem({
           {topic.name}
           {topic.locked && (
             <span className={styles.lockedBadge}><Icon name="lock" size={10} /> Locked</span>
+          )}
+          {topic.restricted && (
+            <span className={styles.restrictedBadge}><Icon name="lock" size={10} /> Restricted</span>
           )}
         </div>
         {topic.description && (
