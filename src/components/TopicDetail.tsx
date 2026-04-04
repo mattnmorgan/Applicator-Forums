@@ -19,6 +19,7 @@ interface ThreadSummary {
   lastPostUserName: string | null;
   lastPostUserProfilePicture: string | null;
   messageCount: number;
+  lastReadAt: number | null;
 }
 
 interface TopicInfo {
@@ -226,12 +227,15 @@ function ThreadRowItem({
   onClick: () => void;
 }) {
   const createdDate = thread.createdAt ? new Date(thread.createdAt).toLocaleDateString() : "";
+  const isUnread = thread.messageCount > 0
+    && (thread.lastReadAt === null || (thread.lastPostDate !== null && thread.lastPostDate > thread.lastReadAt));
 
   return (
     <div className={styles.threadRow} onClick={onClick}>
       {/* Main content */}
       <div className={styles.threadRowContent}>
         <div className={styles.threadRowName}>
+          {isUnread && <span className={styles.unreadDot} />}
           {thread.name}
           {thread.pinned && <span style={{ color: "#3b82f6", fontSize: 12 }}><Icon name="pin" size={12} /></span>}
           {thread.locked && (

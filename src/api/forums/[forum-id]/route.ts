@@ -3,6 +3,7 @@ import { ApiContext } from "@applicator/sdk/context";
 import { ForumRecord } from "@/src/types/ForumRecord";
 import { SectionRecord } from "@/src/types/SectionRecord";
 import { TopicRecord } from "@/src/types/TopicRecord";
+import { ThreadAccessRecord } from "@/src/types/ThreadAccessRecord";
 import {
   getForumAccess,
   canModerate,
@@ -25,10 +26,28 @@ export async function GET(
   const topics = context.recordManager<TopicRecord>("forums", "topic");
   const userMgr = context.recordManager("system", "users");
 
-  const [sectionsResult, topicsResult] = await Promise.all([
+  const accessRm = context.recordManager<ThreadAccessRecord>("forums", "thread_access");
+
+  const [sectionsResult, topicsResult, threadAccessResult] = await Promise.all([
     sections.readRecords({ fields: { forumId }, limit: 500 }),
     topics.readRecords({ fields: { forumId }, limit: 500 }),
+    accessRm.readRecords({
+      filters: [
+        { field: "userId", operator: "=", value: access.userId },
+        { field: "forumId", operator: "=", value: forumId },
+      ],
+      limit: 5000,
+    }),
   ]);
+
+  // Build map: topicId -> max(accessedAt) across all threads the user has read in that topic
+  const topicAccessMap = new Map<string, number>();
+  for (const a of threadAccessResult.records) {
+    const current = topicAccessMap.get(a.data.topicId) ?? 0;
+    if (a.data.accessedAt > current) {
+      topicAccessMap.set(a.data.topicId, a.data.accessedAt);
+    }
+  }
 
   const userAuthorityId = canModerate(access.level)
     ? null
@@ -62,6 +81,10 @@ export async function GET(
             ? `/api/system/assets/icons/users/${t.data.lastPostUserId}` : null;
         }
 
+        const maxAccess = topicAccessMap.get(t.id) ?? null;
+        const hasUnread = t.data.lastPostDate !== null
+          && (maxAccess === null || t.data.lastPostDate > maxAccess);
+
         return {
           id: t.id,
           name: t.data.name,
@@ -75,6 +98,7 @@ export async function GET(
           lastPostUserId: t.data.lastPostUserId || null,
           lastPostUserName,
           lastPostUserProfilePicture,
+          hasUnread,
         };
       }),
     )

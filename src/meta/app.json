@@ -188,6 +188,46 @@
       ]
     },
     {
+      "name": "thread_access",
+      "description": "Tracks when a user last accessed a thread, for unread indicators",
+      "fields": [
+        {
+          "name": "threadId",
+          "type": "relationship",
+          "relatedTo": "thread",
+          "required": true,
+          "description": "The thread that was accessed"
+        },
+        {
+          "name": "topicId",
+          "type": "relationship",
+          "relatedTo": "topic",
+          "required": true,
+          "description": "Parent topic (denormalized for efficient topic-level queries)"
+        },
+        {
+          "name": "forumId",
+          "type": "relationship",
+          "relatedTo": "forum",
+          "required": true,
+          "description": "Parent forum (denormalized for efficient forum-level queries)"
+        },
+        {
+          "name": "userId",
+          "type": "relationship",
+          "relatedTo": "system:users",
+          "required": true,
+          "description": "The user who accessed the thread"
+        },
+        {
+          "name": "accessedAt",
+          "type": "datetime",
+          "required": true,
+          "description": "Timestamp of the most recent access"
+        }
+      ]
+    },
+    {
       "name": "message",
       "description": "A rich-text message within a thread",
       "fields": [

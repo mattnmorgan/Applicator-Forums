@@ -3,6 +3,7 @@ import { ApiContext } from "@applicator/sdk/context";
 import { TopicRecord } from "@/src/types/TopicRecord";
 import { ThreadRecord } from "@/src/types/ThreadRecord";
 import { MessageRecord } from "@/src/types/MessageRecord";
+import { ThreadAccessRecord } from "@/src/types/ThreadAccessRecord";
 import { getForumAccess, canPost, canModerate } from "@/src/lib/forum-access";
 
 const PAGE_SIZE = 100;
@@ -28,6 +29,7 @@ export async function GET(
   const threads = context.recordManager<ThreadRecord>("forums", "thread");
   const messagesRm = context.recordManager<MessageRecord>("forums", "message");
   const userMgr = context.recordManager("system", "users");
+  const accessRm = context.recordManager<ThreadAccessRecord>("forums", "thread_access");
 
   // Get pinned threads (no pagination)
   const pinnedResult = await threads.readRecords({
@@ -46,6 +48,19 @@ export async function GET(
     limit: PAGE_SIZE,
     offset,
   });
+
+  // Load all thread_access records for the current user in this topic
+  const accessResult = await accessRm.readRecords({
+    filters: [
+      { field: "userId", operator: "=", value: access.userId },
+      { field: "topicId", operator: "=", value: topicId },
+    ],
+    limit: 500,
+  });
+  const accessMap = new Map<string, number>();
+  for (const a of accessResult.records) {
+    accessMap.set(a.data.threadId, a.data.accessedAt);
+  }
 
   const enrichThread = async (t: { id: string; data: ThreadRecord; created_at: number }) => {
     const creator = await userMgr.readRecord(t.data.createdBy) as any;
@@ -75,6 +90,7 @@ export async function GET(
       lastPostUserName,
       lastPostUserProfilePicture,
       messageCount: msgResult.total,
+      lastReadAt: accessMap.get(t.id) ?? null,
     };
   };
 

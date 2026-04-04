@@ -3,7 +3,32 @@ import { ApiContext } from "@applicator/sdk/context";
 import { ThreadRecord } from "@/src/types/ThreadRecord";
 import { TopicRecord } from "@/src/types/TopicRecord";
 import { MessageRecord } from "@/src/types/MessageRecord";
+import { ThreadAccessRecord } from "@/src/types/ThreadAccessRecord";
 import { getForumAccess, canPost, canModerate } from "@/src/lib/forum-access";
+
+async function upsertThreadAccess(
+  context: ApiContext,
+  threadId: string,
+  topicId: string,
+  forumId: string,
+  userId: string,
+) {
+  const now = Date.now();
+  const rm = context.recordManager<ThreadAccessRecord>("forums", "thread_access");
+  const existing = await rm.readRecords({
+    filters: [
+      { field: "threadId", operator: "=", value: threadId },
+      { field: "userId", operator: "=", value: userId },
+    ],
+    limit: 1,
+  });
+  const table = await rm.getTable();
+  if (existing.records.length > 0) {
+    await rm.updateRecord(table, existing.records[0].id, { accessedAt: now });
+  } else {
+    await rm.createRecord(table, { threadId, topicId, forumId, userId, accessedAt: now });
+  }
+}
 
 const PAGE_SIZE = 100;
 
@@ -28,11 +53,14 @@ export async function GET(
   const messages = context.recordManager<MessageRecord>("forums", "message");
   const userMgr = context.recordManager("system", "users");
 
-  const result = await messages.readRecords({
-    fields: { threadId },
-    limit: PAGE_SIZE,
-    offset,
-  });
+  const [result] = await Promise.all([
+    messages.readRecords({
+      fields: { threadId },
+      limit: PAGE_SIZE,
+      offset,
+    }),
+    upsertThreadAccess(context, threadId, thread.data.topicId, thread.data.forumId, access.userId).catch(() => {}),
+  ]);
 
   // Sort by created_at ascending
   const sorted = [...result.records].sort((a, b) => a.created_at - b.created_at);
@@ -145,12 +173,15 @@ export async function POST(
       removed: false,
     });
 
-    // Update thread and topic lastPostDate
+    // Update thread and topic lastPostDate; also mark thread as read for the poster
     const threadTable = await threads.getTable();
-    await threads.updateRecord(threadTable, threadId, {
-      lastPostDate: now,
-      lastPostUserId: user!.id,
-    });
+    await Promise.all([
+      threads.updateRecord(threadTable, threadId, {
+        lastPostDate: now,
+        lastPostUserId: user!.id,
+      }),
+      upsertThreadAccess(context, threadId, thread.data.topicId, thread.data.forumId, user!.id).catch(() => {}),
+    ]);
 
     if (topic) {
       const topicTable = await topics.getTable();

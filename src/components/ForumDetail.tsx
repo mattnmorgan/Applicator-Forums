@@ -17,6 +17,7 @@ interface TopicSummary {
   lastPostDate: number | null;
   lastPostUserName: string | null;
   lastPostUserProfilePicture: string | null;
+  hasUnread: boolean;
 }
 
 interface SectionSummary {
@@ -136,6 +137,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
         lastPostDate: null,
         lastPostUserName: null,
         lastPostUserProfilePicture: null,
+        hasUnread: false,
       };
       setForum((prev) => prev ? { ...prev, topics: [...prev.topics, newTopic] } : prev);
     }
@@ -551,6 +553,7 @@ function TopicRowItem({
 
       <div className={styles.topicRowContent}>
         <div className={styles.topicRowName}>
+          {!editMode && topic.hasUnread && <span className={styles.unreadDot} />}
           {topic.name}
           {topic.locked && (
             <span className={styles.lockedBadge}><Icon name="lock" size={10} /> Locked</span>

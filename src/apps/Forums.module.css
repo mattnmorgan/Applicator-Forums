@@ -920,3 +920,13 @@
   cursor: pointer;
 }
 .addTopicBtn:hover { color: #60a5fa; }
+
+/* ── Unread indicator ────────────────────────────────────── */
+.unreadDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3b82f6;
+  flex-shrink: 0;
+}
