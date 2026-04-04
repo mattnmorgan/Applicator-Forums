@@ -188,6 +188,39 @@
       ]
     },
     {
+      "name": "topic_access",
+      "description": "Tracks when a user last visited a topic's thread list, for forum-level unread indicators",
+      "fields": [
+        {
+          "name": "topicId",
+          "type": "relationship",
+          "relatedTo": "topic",
+          "required": true,
+          "description": "The topic that was visited"
+        },
+        {
+          "name": "forumId",
+          "type": "relationship",
+          "relatedTo": "forum",
+          "required": true,
+          "description": "Parent forum (denormalized for efficient forum-level queries)"
+        },
+        {
+          "name": "userId",
+          "type": "relationship",
+          "relatedTo": "system:users",
+          "required": true,
+          "description": "The user who visited the topic"
+        },
+        {
+          "name": "accessedAt",
+          "type": "datetime",
+          "required": true,
+          "description": "Timestamp of the most recent visit to this topic's thread list"
+        }
+      ]
+    },
+    {
       "name": "thread_access",
       "description": "Tracks when a user last accessed a thread, for unread indicators",
       "fields": [

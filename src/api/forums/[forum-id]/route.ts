@@ -3,7 +3,7 @@ import { ApiContext } from "@applicator/sdk/context";
 import { ForumRecord } from "@/src/types/ForumRecord";
 import { SectionRecord } from "@/src/types/SectionRecord";
 import { TopicRecord } from "@/src/types/TopicRecord";
-import { ThreadAccessRecord } from "@/src/types/ThreadAccessRecord";
+import { TopicAccessRecord } from "@/src/types/TopicAccessRecord";
 import {
   getForumAccess,
   canModerate,
@@ -26,27 +26,24 @@ export async function GET(
   const topics = context.recordManager<TopicRecord>("forums", "topic");
   const userMgr = context.recordManager("system", "users");
 
-  const accessRm = context.recordManager<ThreadAccessRecord>("forums", "thread_access");
+  const topicAccessRm = context.recordManager<TopicAccessRecord>("forums", "topic_access");
 
-  const [sectionsResult, topicsResult, threadAccessResult] = await Promise.all([
+  const [sectionsResult, topicsResult, topicAccessResult] = await Promise.all([
     sections.readRecords({ fields: { forumId }, limit: 500 }),
     topics.readRecords({ fields: { forumId }, limit: 500 }),
-    accessRm.readRecords({
+    topicAccessRm.readRecords({
       filters: [
         { field: "userId", operator: "=", value: access.userId },
         { field: "forumId", operator: "=", value: forumId },
       ],
-      limit: 5000,
+      limit: 500,
     }),
   ]);
 
-  // Build map: topicId -> max(accessedAt) across all threads the user has read in that topic
+  // Build map: topicId -> accessedAt (when the user last visited this topic's thread list)
   const topicAccessMap = new Map<string, number>();
-  for (const a of threadAccessResult.records) {
-    const current = topicAccessMap.get(a.data.topicId) ?? 0;
-    if (a.data.accessedAt > current) {
-      topicAccessMap.set(a.data.topicId, a.data.accessedAt);
-    }
+  for (const a of topicAccessResult.records) {
+    topicAccessMap.set(a.data.topicId, a.data.accessedAt);
   }
 
   const userAuthorityId = canModerate(access.level)
@@ -81,9 +78,9 @@ export async function GET(
             ? `/api/system/assets/icons/users/${t.data.lastPostUserId}` : null;
         }
 
-        const maxAccess = topicAccessMap.get(t.id) ?? null;
+        const topicAccessedAt = topicAccessMap.get(t.id) ?? null;
         const hasUnread = t.data.lastPostDate !== null
-          && (maxAccess === null || t.data.lastPostDate > maxAccess);
+          && (topicAccessedAt === null || t.data.lastPostDate > topicAccessedAt);
 
         return {
           id: t.id,

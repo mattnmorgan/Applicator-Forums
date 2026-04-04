@@ -4,7 +4,31 @@ import { TopicRecord } from "@/src/types/TopicRecord";
 import { ThreadRecord } from "@/src/types/ThreadRecord";
 import { MessageRecord } from "@/src/types/MessageRecord";
 import { ThreadAccessRecord } from "@/src/types/ThreadAccessRecord";
+import { TopicAccessRecord } from "@/src/types/TopicAccessRecord";
 import { getForumAccess, canPost, canModerate } from "@/src/lib/forum-access";
+
+async function upsertTopicAccess(
+  context: ApiContext,
+  topicId: string,
+  forumId: string,
+  userId: string,
+) {
+  const now = Date.now();
+  const rm = context.recordManager<TopicAccessRecord>("forums", "topic_access");
+  const existing = await rm.readRecords({
+    filters: [
+      { field: "topicId", operator: "=", value: topicId },
+      { field: "userId", operator: "=", value: userId },
+    ],
+    limit: 1,
+  });
+  const table = await rm.getTable();
+  if (existing.records.length > 0) {
+    await rm.updateRecord(table, existing.records[0].id, { accessedAt: now });
+  } else {
+    await rm.createRecord(table, { topicId, forumId, userId, accessedAt: now });
+  }
+}
 
 const PAGE_SIZE = 100;
 
@@ -48,6 +72,9 @@ export async function GET(
     limit: PAGE_SIZE,
     offset,
   });
+
+  // Mark the user as having visited this topic (for forum-level unread indicator)
+  upsertTopicAccess(context, topicId, topic.data.forumId, access.userId).catch(() => {});
 
   // Load all thread_access records for the current user in this topic
   const accessResult = await accessRm.readRecords({
