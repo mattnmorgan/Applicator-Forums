@@ -67,11 +67,11 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
     try {
       const res = await fetch(`/api/forums/threads/${threadId}/messages?page=${p}`);
       const json = await res.json();
-      if (!res.ok || json.error) {
-        setAccessError(true);
-      } else {
+      if (json?.thread && json?.access) {
         setData(json);
         bodyRef.current?.scrollTo({ top: 0 });
+      } else {
+        setAccessError(true);
       }
     } finally {
       setLoading(false);

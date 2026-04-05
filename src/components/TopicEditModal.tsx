@@ -16,6 +16,8 @@ interface TopicSummary {
   restricted: boolean;
   lastPostDate: number | null;
   lastPostUserName: string | null;
+  lastPostUserProfilePicture: string | null;
+  hasUnread: boolean;
 }
 
 interface TopicAccessEntry {

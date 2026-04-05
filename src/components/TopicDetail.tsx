@@ -62,8 +62,8 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
     try {
       const res = await fetch(`/api/forums/topics/${topicId}/threads?page=${p}`);
       const json = await res.json();
-      if (!res.ok || json.error) setAccessError(true);
-      else setData(json);
+      if (json?.topic && json?.access) setData(json);
+      else setAccessError(true);
     } finally {
       setLoading(false);
     }

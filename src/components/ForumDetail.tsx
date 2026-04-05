@@ -67,9 +67,9 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
     setLoading(true);
     try {
       const res = await fetch(`/api/forums/forums/${forumId}`);
-      const json = await res.json();
-      if (!res.ok || json.error) setAccessError(true);
-      else setForum(json);
+      const json = await res.json().catch(() => null);
+      if (json?.id && json?.access) setForum(json);
+      else setAccessError(true);
     } finally {
       setLoading(false);
     }
