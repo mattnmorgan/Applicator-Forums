@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import type UIContext from "@sdk/types/ui-context";
 import ForumList from "@/src/components/ForumList";
 import ForumDetail from "@/src/components/ForumDetail";
 import ForumSettings from "@/src/components/ForumSettings";
@@ -17,11 +16,19 @@ type Nav =
   | { view: "thread"; forumId: string; topicId: string; threadId: string };
 
 interface Props {
-  context: UIContext;
+  path?: string[];
+  appId?: string;
 }
 
-export default function Forums({ context }: Props) {
-  const [nav, setNav] = useState<Nav>({ view: "list" });
+function initialNav(path: string[]): Nav {
+  if (path[0] === "thread" && path[1] && path[2] && path[3]) {
+    return { view: "thread", forumId: path[1], topicId: path[2], threadId: path[3] };
+  }
+  return { view: "list" };
+}
+
+export default function Forums({ path = [] }: Props) {
+  const [nav, setNav] = useState<Nav>(() => initialNav(path));
 
   return (
     <div className={styles.app}>

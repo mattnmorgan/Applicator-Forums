@@ -14,7 +14,10 @@ async function upsertThreadAccess(
   userId: string,
 ) {
   const now = Date.now();
-  const rm = context.recordManager<ThreadAccessRecord>("forums", "thread_access");
+  const rm = context.recordManager<ThreadAccessRecord>(
+    "forums",
+    "thread_access",
+  );
   const existing = await rm.readRecords({
     filters: [
       { field: "threadId", operator: "=", value: threadId },
@@ -26,7 +29,13 @@ async function upsertThreadAccess(
   if (existing.records.length > 0) {
     await rm.updateRecord(table, existing.records[0].id, { accessedAt: now });
   } else {
-    await rm.createRecord(table, { threadId, topicId, forumId, userId, accessedAt: now });
+    await rm.createRecord(table, {
+      threadId,
+      topicId,
+      forumId,
+      userId,
+      accessedAt: now,
+    });
   }
 }
 
@@ -41,10 +50,12 @@ export async function GET(
   const { threadId } = params;
   const threads = context.recordManager<ThreadRecord>("forums", "thread");
   const thread = await threads.readRecord(threadId);
-  if (!thread) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!thread)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await getForumAccess(context, thread.data.forumId);
-  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!access)
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
@@ -59,20 +70,30 @@ export async function GET(
       limit: PAGE_SIZE,
       offset,
     }),
-    upsertThreadAccess(context, threadId, thread.data.topicId, thread.data.forumId, access.userId).catch(() => {}),
+    upsertThreadAccess(
+      context,
+      threadId,
+      thread.data.topicId,
+      thread.data.forumId,
+      access.userId,
+    ).catch(() => {}),
   ]);
 
   // Sort by created_at ascending
-  const sorted = [...result.records].sort((a, b) => a.created_at - b.created_at);
+  const sorted = [...result.records].sort(
+    (a, b) => a.created_at - b.created_at,
+  );
 
   const enriched = await Promise.all(
     sorted.map(async (m) => {
       let authorName: string | null = null;
       let profilePicture: string | null = null;
       if (!m.data.removed) {
-        const u = await userMgr.readRecord(m.data.authorId) as any;
+        const u = (await userMgr.readRecord(m.data.authorId)) as any;
         authorName = u?.data.display_name || u?.data.username || null;
-        profilePicture = u?.data.icon ? `/api/system/assets/icons/users/${m.data.authorId}` : null;
+        profilePicture = u?.data.icon
+          ? `/api/system/assets/icons/users/${m.data.authorId}`
+          : null;
       }
       return {
         id: m.id,
@@ -134,27 +155,41 @@ export async function POST(
   const { threadId } = params;
   const threads = context.recordManager<ThreadRecord>("forums", "thread");
   const thread = await threads.readRecord(threadId);
-  if (!thread) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!thread)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await getForumAccess(context, thread.data.forumId);
-  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!access)
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
   if (!canPost(access.level)) {
-    return NextResponse.json({ error: "Forbidden — you do not have post permissions" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Forbidden — you do not have post permissions" },
+      { status: 403 },
+    );
   }
   if (thread.data.locked && !canModerate(access.level)) {
-    return NextResponse.json({ error: "Forbidden — this thread is locked" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Forbidden — this thread is locked" },
+      { status: 403 },
+    );
   }
 
   const topics = context.recordManager<TopicRecord>("forums", "topic");
   const topic = await topics.readRecord(thread.data.topicId);
   if (topic?.data.locked && !canModerate(access.level)) {
-    return NextResponse.json({ error: "Forbidden — this topic is locked" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Forbidden — this topic is locked" },
+      { status: 403 },
+    );
   }
 
   try {
     const body = await req.json();
     if (!body.content?.trim()) {
-      return NextResponse.json({ error: "Content is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Content is required" },
+        { status: 400 },
+      );
     }
 
     const user = await context.user();
@@ -180,7 +215,13 @@ export async function POST(
         lastPostDate: now,
         lastPostUserId: user!.id,
       }),
-      upsertThreadAccess(context, threadId, thread.data.topicId, thread.data.forumId, user!.id).catch(() => {}),
+      upsertThreadAccess(
+        context,
+        threadId,
+        thread.data.topicId,
+        thread.data.forumId,
+        user!.id,
+      ).catch(() => {}),
     ]);
 
     if (topic) {
@@ -192,22 +233,25 @@ export async function POST(
     }
 
     const userMgr = context.recordManager("system", "users");
-    const u = await userMgr.readRecord(user!.id) as any;
+    const u = (await userMgr.readRecord(user!.id)) as any;
 
     // Notify the thread creator if someone else replied
     if (thread.data.createdBy !== user!.id) {
       const posterName = u?.data.display_name || u?.data.username || "Someone";
       const notifs = context.recordManager("system", "notifications");
-      notifs.createRecord(null, {
-        type: "info",
-        app: "forums",
-        title: "New reply to your thread",
-        message: `${posterName} replied to "${thread.data.name}" in ${topic?.data.name ?? "a topic"}`,
-        timestamp: Date.now(),
-        read: false,
-        archived: false,
-        user_id: thread.data.createdBy,
-      }).catch(() => {});
+      notifs
+        .createRecord(null, {
+          type: "info",
+          app: "forums",
+          title: "New reply to your thread",
+          message: `${posterName} replied to "${thread.data.name}" in ${topic?.data.name ?? "a topic"}`,
+          url: `/app/forums:main/thread/${thread.data.forumId}/${thread.data.topicId}/${threadId}`,
+          timestamp: Date.now(),
+          read: false,
+          archived: false,
+          user_id: thread.data.createdBy,
+        })
+        .catch(() => {});
     }
 
     return NextResponse.json(
@@ -216,7 +260,9 @@ export async function POST(
         content: record.data.content,
         authorId: record.data.authorId,
         authorName: u?.data.display_name || u?.data.username || user!.id,
-        profilePicture: u?.data.icon ? `/api/system/assets/icons/users/${user!.id}` : null,
+        profilePicture: u?.data.icon
+          ? `/api/system/assets/icons/users/${user!.id}`
+          : null,
         edited: false,
         editedAt: null,
         removed: false,
