@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import ForumList from "@/src/components/ForumList";
 import ForumDetail from "@/src/components/ForumDetail";
 import ForumSettings from "@/src/components/ForumSettings";
@@ -18,75 +18,90 @@ type Nav =
 interface Props {
   path?: string[];
   appId?: string;
+  navigate?: (url: string) => void;
 }
 
 function initialNav(path: string[]): Nav {
   if (path[0] === "thread" && path[1] && path[2] && path[3]) {
     return { view: "thread", forumId: path[1], topicId: path[2], threadId: path[3] };
   }
+  if (path[0] === "topic" && path[1] && path[2]) {
+    return { view: "topic", forumId: path[1], topicId: path[2] };
+  }
+  if (path[0] === "forum" && path[1]) {
+    return { view: "forum", forumId: path[1] };
+  }
   return { view: "list" };
 }
 
-export default function Forums({ path = [] }: Props) {
+function navToUrl(nav: Nav): string {
+  switch (nav.view) {
+    case "forum":    return `/app/forums/forum/${nav.forumId}`;
+    case "settings": return `/app/forums/forum/${nav.forumId}`;
+    case "topic":    return `/app/forums/topic/${nav.forumId}/${nav.topicId}`;
+    case "thread":   return `/app/forums/thread/${nav.forumId}/${nav.topicId}/${nav.threadId}`;
+    default:         return `/app/forums`;
+  }
+}
+
+export default function Forums({ path = [], navigate: platformNavigate }: Props) {
   const [nav, setNav] = useState<Nav>(() => initialNav(path));
+
+  const navigate = useCallback((next: Nav) => {
+    setNav(next);
+    const url = navToUrl(next);
+    if (platformNavigate) {
+      platformNavigate(url);
+    } else {
+      window.history.pushState(null, "", url);
+    }
+  }, [platformNavigate]);
 
   return (
     <div className={styles.app}>
       {nav.view === "list" && (
-        <ForumList onOpen={(forumId) => setNav({ view: "forum", forumId })} />
+        <ForumList onOpen={(forumId) => navigate({ view: "forum", forumId })} />
       )}
       {nav.view === "forum" && (
         <ForumDetail
           forumId={nav.forumId}
-          onBack={() => setNav({ view: "list" })}
+          onBack={() => navigate({ view: "list" })}
           onNavigateToTopic={(topicId) =>
-            setNav({ view: "topic", forumId: nav.forumId, topicId })
+            navigate({ view: "topic", forumId: nav.forumId, topicId })
           }
           onNavigateToSettings={(forumData: any) =>
-            setNav({ view: "settings", forumId: nav.forumId, forumData })
+            navigate({ view: "settings", forumId: nav.forumId, forumData })
           }
         />
       )}
       {nav.view === "settings" && (
         <ForumSettings
           forum={nav.forumData}
-          onBack={() => setNav({ view: "forum", forumId: nav.forumId })}
-          onUpdated={(updates) =>
-            setNav((prev) =>
-              prev.view === "settings"
-                ? { ...prev, forumData: { ...prev.forumData, ...updates } }
-                : prev,
-            )
-          }
-          onDeleted={() => setNav({ view: "list" })}
-          onOwnershipTransferred={() => setNav({ view: "forum", forumId: nav.forumId })}
+          onBack={() => navigate({ view: "forum", forumId: nav.forumId })}
+          onUpdated={(updates) => {
+            const next = { ...nav, forumData: { ...nav.forumData, ...updates } };
+            setNav(next);
+          }}
+          onDeleted={() => navigate({ view: "list" })}
+          onOwnershipTransferred={() => navigate({ view: "forum", forumId: nav.forumId })}
         />
       )}
       {nav.view === "topic" && (
         <TopicDetail
           topicId={nav.topicId}
-          onBack={() => setNav({ view: "forum", forumId: nav.forumId })}
-          onNavigateToForum={() => setNav({ view: "forum", forumId: nav.forumId })}
+          onBack={() => navigate({ view: "forum", forumId: nav.forumId })}
+          onNavigateToForum={() => navigate({ view: "forum", forumId: nav.forumId })}
           onNavigateToThread={(threadId) =>
-            setNav({
-              view: "thread",
-              forumId: nav.forumId,
-              topicId: nav.topicId,
-              threadId,
-            })
+            navigate({ view: "thread", forumId: nav.forumId, topicId: nav.topicId, threadId })
           }
         />
       )}
       {nav.view === "thread" && (
         <ThreadDetail
           threadId={nav.threadId}
-          onBack={() =>
-            setNav({ view: "topic", forumId: nav.forumId, topicId: nav.topicId })
-          }
-          onNavigateToForum={() => setNav({ view: "forum", forumId: nav.forumId })}
-          onNavigateToTopic={() =>
-            setNav({ view: "topic", forumId: nav.forumId, topicId: nav.topicId })
-          }
+          onBack={() => navigate({ view: "topic", forumId: nav.forumId, topicId: nav.topicId })}
+          onNavigateToForum={() => navigate({ view: "forum", forumId: nav.forumId })}
+          onNavigateToTopic={() => navigate({ view: "topic", forumId: nav.forumId, topicId: nav.topicId })}
         />
       )}
     </div>

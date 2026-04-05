@@ -53,6 +53,7 @@ interface Props {
 export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNavigateToForum }: Props) {
   const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState(false);
   const [page, setPage] = useState(1);
   const [showNewThread, setShowNewThread] = useState(false);
 
@@ -61,6 +62,7 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
     try {
       const res = await fetch(`/api/forums/topics/${topicId}/threads?page=${p}`);
       if (res.ok) setData(await res.json());
+      else if (res.status === 403 || res.status === 404) setAccessError(true);
     } finally {
       setLoading(false);
     }
@@ -90,7 +92,7 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
   };
 
   if (loading && !data) return <div className={styles.loading}>Loading threads…</div>;
-  if (!data) return <div className={styles.loading}>Topic not found.</div>;
+  if (accessError || !data) return <div className={styles.loading}>Topic does not exist or you do not have access.</div>;
 
   const { topic, pinned, threads, totalPages } = data;
 

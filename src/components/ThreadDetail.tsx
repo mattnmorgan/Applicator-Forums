@@ -51,6 +51,7 @@ interface Props {
 export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNavigateToTopic }: Props) {
   const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState(false);
   const [page, setPage] = useState(1);
   const [replyHtml, setReplyHtml] = useState("");
   const [replying, setReplying] = useState(false);
@@ -68,6 +69,8 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
       if (res.ok) {
         setData(await res.json());
         bodyRef.current?.scrollTo({ top: 0 });
+      } else if (res.status === 403 || res.status === 404) {
+        setAccessError(true);
       }
     } finally {
       setLoading(false);
@@ -174,8 +177,84 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
     }
   };
 
+  const handlePrint = async () => {
+    if (!data) return;
+    const { thread, topic, forum, totalPages } = data;
+
+    // Fetch all pages (page 1 already loaded; fetch remaining in parallel)
+    let allMessages: MessageSummary[] = [...data.messages];
+    if (totalPages > 1) {
+      const remaining = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, i) =>
+          fetch(`/api/forums/threads/${threadId}/messages?page=${i + 2}`)
+            .then((r) => r.ok ? r.json() : null)
+        )
+      );
+      for (const page of remaining) {
+        if (page?.messages) allMessages = allMessages.concat(page.messages);
+      }
+      allMessages.sort((a, b) => a.createdAt - b.createdAt);
+    }
+
+    const messagesHtml = allMessages.map((msg) => {
+      const date = msg.createdAt ? new Date(msg.createdAt).toLocaleString() : "";
+      const author = msg.removed ? "[ removed ]" : (msg.authorName || "Unknown");
+      const content = msg.removed
+        ? "<em style='color:#888'>This message was removed by a moderator.</em>"
+        : msg.content;
+      const editedNote = msg.edited && !msg.removed
+        ? `<span style="color:#888;font-size:11px"> · edited</span>` : "";
+      return `
+        <div class="message">
+          <div class="message-meta">${author} &mdash; ${date}${editedNote}</div>
+          <div class="message-body">${content}</div>
+        </div>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>${thread.name}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, serif; font-size: 14px; color: #111; padding: 40px; max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .breadcrumb { font-size: 12px; color: #666; margin-bottom: 6px; }
+    .thread-desc { font-size: 13px; color: #444; margin-bottom: 24px; border-bottom: 1px solid #ddd; padding-bottom: 16px; }
+    .message { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+    .message:last-child { border-bottom: none; }
+    .message-meta { font-size: 12px; color: #555; font-family: Arial, sans-serif; margin-bottom: 6px; font-weight: 600; }
+    .message-body { font-size: 14px; line-height: 1.7; }
+    .message-body p { margin-bottom: 10px; }
+    .message-body p:last-child { margin-bottom: 0; }
+    .message-body ul, .message-body ol { padding-left: 20px; margin-bottom: 10px; }
+    .message-body blockquote { border-left: 3px solid #ccc; padding-left: 12px; color: #555; margin: 8px 0; }
+    .message-body pre, .message-body code { font-family: monospace; background: #f4f4f4; padding: 2px 4px; border-radius: 3px; }
+    .message-body pre { padding: 10px; overflow: auto; }
+    .print-footer { margin-top: 32px; font-size: 11px; color: #999; font-family: Arial, sans-serif; text-align: right; }
+    @media print { body { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <div class="breadcrumb">${forum.name} / ${topic.name}</div>
+  <h1>${thread.name}</h1>
+  ${thread.description ? `<div class="thread-desc">${thread.description}</div>` : ""}
+  ${messagesHtml}
+  <div class="print-footer">Printed ${new Date().toLocaleString()} &mdash; ${allMessages.length} post${allMessages.length !== 1 ? "s" : ""}</div>
+  <script>window.onload = function() { window.print(); }<\/script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  };
+
   if (loading && !data) return <div className={styles.loading}>Loading messages…</div>;
-  if (!data) return <div className={styles.loading}>Thread not found.</div>;
+  if (accessError || !data) return <div className={styles.loading}>Thread does not exist or you do not have access.</div>;
 
   const { thread, topic, forum, messages, totalPages } = data;
 
@@ -262,6 +341,13 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
             </>
           ) : (
             <>
+              <ButtonIcon
+                name="print"
+                iconSize={14}
+                label="Print / Export PDF"
+                onClick={handlePrint}
+                placement="bottom"
+              />
               {canEdit && (
                 <ButtonIcon
                   name="edit"

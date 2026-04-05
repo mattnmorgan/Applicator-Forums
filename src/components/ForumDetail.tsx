@@ -49,6 +49,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
   const onNavigateToSettings = () => forum && _onNavigateToSettings(forum);
   const [forum, setForum] = useState<ForumData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
@@ -68,6 +69,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
     try {
       const res = await fetch(`/api/forums/forums/${forumId}`);
       if (res.ok) setForum(await res.json());
+      else if (res.status === 403 || res.status === 404) setAccessError(true);
     } finally {
       setLoading(false);
     }
@@ -267,7 +269,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
   };
 
   if (loading) return <div className={styles.loading}>Loading forum…</div>;
-  if (!forum) return <div className={styles.loading}>Forum not found.</div>;
+  if (accessError || !forum) return <div className={styles.loading}>Forum does not exist or you do not have access.</div>;
 
   const sortedSections = [...forum.sections].sort((a, b) => a.order - b.order);
   const editingTopic = editingTopicId ? forum.topics.find((t) => t.id === editingTopicId) : null;
