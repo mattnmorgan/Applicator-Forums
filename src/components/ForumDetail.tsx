@@ -42,11 +42,10 @@ interface Props {
   forumId: string;
   onBack: () => void;
   onNavigateToTopic: (topicId: string) => void;
-  onNavigateToSettings: (forumData: ForumData) => void;
+  onNavigateToSettings: () => void;
 }
 
-export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavigateToSettings: _onNavigateToSettings }: Props) {
-  const onNavigateToSettings = () => forum && _onNavigateToSettings(forum);
+export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavigateToSettings }: Props) {
   const [forum, setForum] = useState<ForumData | null>(null);
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState(false);
@@ -68,8 +67,9 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
     setLoading(true);
     try {
       const res = await fetch(`/api/forums/forums/${forumId}`);
-      if (res.ok) setForum(await res.json());
-      else if (res.status === 403 || res.status === 404) setAccessError(true);
+      const json = await res.json();
+      if (!res.ok || json.error) setAccessError(true);
+      else setForum(json);
     } finally {
       setLoading(false);
     }

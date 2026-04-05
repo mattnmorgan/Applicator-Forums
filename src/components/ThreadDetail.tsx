@@ -66,11 +66,12 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
     setLoading(true);
     try {
       const res = await fetch(`/api/forums/threads/${threadId}/messages?page=${p}`);
-      if (res.ok) {
-        setData(await res.json());
-        bodyRef.current?.scrollTo({ top: 0 });
-      } else if (res.status === 403 || res.status === 404) {
+      const json = await res.json();
+      if (!res.ok || json.error) {
         setAccessError(true);
+      } else {
+        setData(json);
+        bodyRef.current?.scrollTo({ top: 0 });
       }
     } finally {
       setLoading(false);
@@ -246,10 +247,11 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
 </body>
 </html>`;
 
-    const win = window.open("", "_blank");
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
     if (win) {
-      win.document.write(html);
-      win.document.close();
+      win.addEventListener("unload", () => URL.revokeObjectURL(url), { once: true });
     }
   };
 

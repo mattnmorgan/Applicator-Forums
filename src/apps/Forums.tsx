@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import ForumList from "@/src/components/ForumList";
 import ForumDetail from "@/src/components/ForumDetail";
 import ForumSettings from "@/src/components/ForumSettings";
@@ -12,6 +12,7 @@ type Nav =
   | { view: "list" }
   | { view: "forum"; forumId: string }
   | { view: "settings"; forumId: string; forumData: any }
+  | { view: "settings-loading"; forumId: string }
   | { view: "topic"; forumId: string; topicId: string }
   | { view: "thread"; forumId: string; topicId: string; threadId: string };
 
@@ -28,6 +29,9 @@ function initialNav(path: string[]): Nav {
   if (path[0] === "topic" && path[1] && path[2]) {
     return { view: "topic", forumId: path[1], topicId: path[2] };
   }
+  if (path[0] === "settings" && path[1]) {
+    return { view: "settings-loading", forumId: path[1] };
+  }
   if (path[0] === "forum" && path[1]) {
     return { view: "forum", forumId: path[1] };
   }
@@ -36,11 +40,12 @@ function initialNav(path: string[]): Nav {
 
 function navToUrl(nav: Nav): string {
   switch (nav.view) {
-    case "forum":    return `/app/forums:main/forum/${nav.forumId}`;
-    case "settings": return `/app/forums:main/forum/${nav.forumId}`;
-    case "topic":    return `/app/forums:main/topic/${nav.forumId}/${nav.topicId}`;
-    case "thread":   return `/app/forums:main/thread/${nav.forumId}/${nav.topicId}/${nav.threadId}`;
-    default:         return `/app/forums:main`;
+    case "forum":            return `/app/forums:main/forum/${nav.forumId}`;
+    case "settings":
+    case "settings-loading": return `/app/forums:main/settings/${nav.forumId}`;
+    case "topic":            return `/app/forums:main/topic/${nav.forumId}/${nav.topicId}`;
+    case "thread":           return `/app/forums:main/thread/${nav.forumId}/${nav.topicId}/${nav.threadId}`;
+    default:                 return `/app/forums:main`;
   }
 }
 
@@ -57,6 +62,22 @@ export default function Forums({ path = [], navigate: platformNavigate }: Props)
     }
   }, [platformNavigate]);
 
+  // Resolve settings-loading: fetch forum data then transition to settings
+  useEffect(() => {
+    if (nav.view !== "settings-loading") return;
+    const { forumId } = nav;
+    fetch(`/api/forums/forums/${forumId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          setNav({ view: "settings", forumId, forumData: data });
+        } else {
+          setNav({ view: "forum", forumId });
+        }
+      })
+      .catch(() => setNav({ view: "forum", forumId }));
+  }, [nav]);
+
   return (
     <div className={styles.app}>
       {nav.view === "list" && (
@@ -69,10 +90,13 @@ export default function Forums({ path = [], navigate: platformNavigate }: Props)
           onNavigateToTopic={(topicId) =>
             navigate({ view: "topic", forumId: nav.forumId, topicId })
           }
-          onNavigateToSettings={(forumData: any) =>
-            navigate({ view: "settings", forumId: nav.forumId, forumData })
+          onNavigateToSettings={() =>
+            navigate({ view: "settings-loading", forumId: nav.forumId })
           }
         />
+      )}
+      {nav.view === "settings-loading" && (
+        <div className={styles.loading}>Loading settings…</div>
       )}
       {nav.view === "settings" && (
         <ForumSettings
