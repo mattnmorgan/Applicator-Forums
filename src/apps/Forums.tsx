@@ -36,11 +36,11 @@ function initialNav(path: string[]): Nav {
 
 function navToUrl(nav: Nav): string {
   switch (nav.view) {
-    case "forum":    return `/app/forums/forum/${nav.forumId}`;
-    case "settings": return `/app/forums/forum/${nav.forumId}`;
-    case "topic":    return `/app/forums/topic/${nav.forumId}/${nav.topicId}`;
-    case "thread":   return `/app/forums/thread/${nav.forumId}/${nav.topicId}/${nav.threadId}`;
-    default:         return `/app/forums`;
+    case "forum":    return `/app/forums:main/forum/${nav.forumId}`;
+    case "settings": return `/app/forums:main/forum/${nav.forumId}`;
+    case "topic":    return `/app/forums:main/topic/${nav.forumId}/${nav.topicId}`;
+    case "thread":   return `/app/forums:main/thread/${nav.forumId}/${nav.topicId}/${nav.threadId}`;
+    default:         return `/app/forums:main`;
   }
 }
 
