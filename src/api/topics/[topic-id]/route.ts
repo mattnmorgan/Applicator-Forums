@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApiContext } from "@applicator/sdk/context";
 import { TopicRecord } from "@/src/types/TopicRecord";
-import { getForumAccess, canModerate } from "@/src/lib/forum-access";
+import { getForumAccess, canModerate, canUserAccessTopic, getUserAuthorityId } from "@/src/lib/forum-access";
 
 // GET /api/forums/topics/:topicId — get topic info (for header on topic detail page)
 export async function GET(
@@ -15,7 +15,13 @@ export async function GET(
   if (!topic) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await getForumAccess(context, topic.data.forumId);
-  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  if (topic.data.restricted) {
+    const userAuthorityId = canModerate(access.level) ? null : await getUserAuthorityId(context, access.userId);
+    const allowed = await canUserAccessTopic(context, topicId, access.userId, userAuthorityId, access.level);
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   return NextResponse.json({
     id: topic.id,

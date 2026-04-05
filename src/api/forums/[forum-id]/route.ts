@@ -19,8 +19,11 @@ export async function GET(
   params: { forumId: string },
 ) {
   const { forumId } = params;
+  const forumsRm = context.recordManager<ForumRecord>("forums", "forum");
+  if (!await forumsRm.readRecord(forumId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const access = await getForumAccess(context, forumId);
-  if (!access) return NextResponse.json({ error: "Not found or access denied" }, { status: 404 });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const sections = context.recordManager<SectionRecord>("forums", "section");
   const topics = context.recordManager<TopicRecord>("forums", "topic");
@@ -127,8 +130,11 @@ export async function PATCH(
   params: { forumId: string },
 ) {
   const { forumId } = params;
+  const forumsRm = context.recordManager<ForumRecord>("forums", "forum");
+  if (!await forumsRm.readRecord(forumId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const access = await getForumAccess(context, forumId);
-  if (!access) return NextResponse.json({ error: "Not found or access denied" }, { status: 404 });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!canModerate(access.level)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -155,8 +161,11 @@ export async function DELETE(
   params: { forumId: string },
 ) {
   const { forumId } = params;
+  const forumsRm = context.recordManager<ForumRecord>("forums", "forum");
+  if (!await forumsRm.readRecord(forumId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const access = await getForumAccess(context, forumId);
-  if (!access) return NextResponse.json({ error: "Not found or access denied" }, { status: 404 });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (access.level !== "owner") {
     return NextResponse.json({ error: "Forbidden — only the owner can delete a forum" }, { status: 403 });
   }

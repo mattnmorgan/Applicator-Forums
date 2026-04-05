@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApiContext } from "@applicator/sdk/context";
 import { ThreadRecord } from "@/src/types/ThreadRecord";
-import { getForumAccess, canModerate } from "@/src/lib/forum-access";
+import { TopicRecord } from "@/src/types/TopicRecord";
+import { getForumAccess, canModerate, canUserAccessTopic, getUserAuthorityId } from "@/src/lib/forum-access";
 
 // PATCH /api/forums/threads/:threadId — update a thread
 export async function PATCH(
@@ -15,7 +16,7 @@ export async function PATCH(
   if (!thread) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await getForumAccess(context, thread.data.forumId);
-  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const user = await context.user();
   const isModerator = canModerate(access.level);
@@ -23,6 +24,15 @@ export async function PATCH(
 
   if (!isModerator && !isCreator) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!isModerator) {
+    const parentTopic = await context.recordManager<TopicRecord>("forums", "topic").readRecord(thread.data.topicId);
+    if (parentTopic?.data.restricted) {
+      const userAuthorityId = await getUserAuthorityId(context, access.userId);
+      const allowed = await canUserAccessTopic(context, thread.data.topicId, access.userId, userAuthorityId, access.level);
+      if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {
@@ -54,7 +64,7 @@ export async function DELETE(
   if (!thread) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await getForumAccess(context, thread.data.forumId);
-  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const user = await context.user();
   const isModerator = canModerate(access.level);
@@ -62,6 +72,15 @@ export async function DELETE(
 
   if (!isModerator && !isCreator) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!isModerator) {
+    const parentTopic = await context.recordManager<TopicRecord>("forums", "topic").readRecord(thread.data.topicId);
+    if (parentTopic?.data.restricted) {
+      const userAuthorityId = await getUserAuthorityId(context, access.userId);
+      const allowed = await canUserAccessTopic(context, thread.data.topicId, access.userId, userAuthorityId, access.level);
+      if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {

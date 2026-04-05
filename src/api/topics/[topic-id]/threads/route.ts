@@ -5,7 +5,7 @@ import { ThreadRecord } from "@/src/types/ThreadRecord";
 import { MessageRecord } from "@/src/types/MessageRecord";
 import { ThreadAccessRecord } from "@/src/types/ThreadAccessRecord";
 import { TopicAccessRecord } from "@/src/types/TopicAccessRecord";
-import { getForumAccess, canPost, canModerate } from "@/src/lib/forum-access";
+import { getForumAccess, canPost, canModerate, canUserAccessTopic, getUserAuthorityId } from "@/src/lib/forum-access";
 
 async function upsertTopicAccess(
   context: ApiContext,
@@ -44,7 +44,13 @@ export async function GET(
   if (!topic) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await getForumAccess(context, topic.data.forumId);
-  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  if (topic.data.restricted) {
+    const userAuthorityId = canModerate(access.level) ? null : await getUserAuthorityId(context, access.userId);
+    const allowed = await canUserAccessTopic(context, topicId, access.userId, userAuthorityId, access.level);
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { searchParams } = new URL(req.url);
   const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
@@ -166,7 +172,14 @@ export async function POST(
   if (!topic) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await getForumAccess(context, topic.data.forumId);
-  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  if (topic.data.restricted) {
+    const userAuthorityId = canModerate(access.level) ? null : await getUserAuthorityId(context, access.userId);
+    const allowed = await canUserAccessTopic(context, topicId, access.userId, userAuthorityId, access.level);
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   if (!canPost(access.level)) {
     return NextResponse.json({ error: "Forbidden — you do not have post permissions" }, { status: 403 });
   }
