@@ -29,11 +29,11 @@ export async function POST(
     const buffer = Buffer.from(await file.arrayBuffer());
     const resized = await sharp(buffer)
       .resize(64, 64, { fit: "cover" })
-      .jpeg({ quality: 85 })
+      .png({ compressionLevel: 6 })
       .toBuffer();
 
     await context.appFileManager.ensureDirectory("icons/topics");
-    await context.appFileManager.writeFile(`icons/topics/${topicId}.jpg`, resized);
+    await context.appFileManager.writeFile(`icons/topics/${topicId}.png`, resized);
 
     const table = await topics.getTable();
     await topics.updateRecord(table, topicId, { hasIcon: true });

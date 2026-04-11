@@ -25,11 +25,11 @@ export async function POST(
     const buffer = Buffer.from(await file.arrayBuffer());
     const resized = await sharp(buffer)
       .resize(64, 64, { fit: "cover" })
-      .jpeg({ quality: 85 })
+      .png({ compressionLevel: 6 })
       .toBuffer();
 
     await context.appFileManager.ensureDirectory("icons/forums");
-    await context.appFileManager.writeFile(`icons/forums/${forumId}.jpg`, resized);
+    await context.appFileManager.writeFile(`icons/forums/${forumId}.png`, resized);
 
     const forums = context.recordManager<ForumRecord>("forums", "forum");
     const table = await forums.getTable();
