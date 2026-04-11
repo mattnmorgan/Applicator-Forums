@@ -4,7 +4,7 @@
   "version": {
     "major": 1,
     "minor": 3,
-    "dev": 0
+    "dev": 1
   },
   "author": "Matthew Morgan",
   "contactEmail": "matthew@morgantech.info",
@@ -320,9 +320,7 @@
     {
       "id": "user",
       "name": "User",
-      "authorizations": [
-        "forums:create-forum"
-      ]
+      "authorizations": ["forums:create-forum"]
     },
     {
       "id": "forum-moderator",
@@ -510,6 +508,14 @@
       "path": "topics/[topic-id]/access/[access-id]",
       "method": "DELETE",
       "description": "Remove a topic access entry"
+    }
+  ],
+  "notificationTopics": [
+    {
+      "id": "thread-reply",
+      "name": "Thread Reply",
+      "summary": "Sent when someone posts a reply to a thread you created",
+      "ntfyTag": "speech_balloon"
     }
   ],
   "agents": [],

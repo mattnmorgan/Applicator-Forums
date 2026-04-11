@@ -253,18 +253,14 @@ export async function POST(
     // Notify the thread creator if someone else replied
     if (thread.data.createdBy !== user!.id) {
       const posterName = u?.data.display_name || u?.data.username || "Someone";
-      const notifs = context.recordManager("system", "notifications");
-      notifs
-        .createRecord(null, {
+      context
+        .sendNotification({
+          userId: thread.data.createdBy,
           type: "info",
-          app: "forums",
           title: "New reply to your thread",
           message: `${posterName} replied to "${thread.data.name}" in ${topic?.data.name ?? "a topic"}`,
           url: `/app/forums:main/thread/${thread.data.forumId}/${thread.data.topicId}/${threadId}`,
-          timestamp: Date.now(),
-          read: false,
-          archived: false,
-          user_id: thread.data.createdBy,
+          topicId: "forums:thread-reply",
         })
         .catch(() => {});
     }
