@@ -13,6 +13,7 @@ type Nav =
   | { view: "forum"; forumId: string }
   | { view: "settings"; forumId: string; forumData: any }
   | { view: "settings-loading"; forumId: string }
+  | { view: "settings-denied"; forumId: string }
   | { view: "topic"; forumId: string; topicId: string }
   | { view: "thread"; forumId: string; topicId: string; threadId: string };
 
@@ -42,7 +43,8 @@ function navToUrl(nav: Nav): string {
   switch (nav.view) {
     case "forum":            return `/app/forums:main/forum/${nav.forumId}`;
     case "settings":
-    case "settings-loading": return `/app/forums:main/settings/${nav.forumId}`;
+    case "settings-loading":
+    case "settings-denied":  return `/app/forums:main/settings/${nav.forumId}`;
     case "topic":            return `/app/forums:main/topic/${nav.forumId}/${nav.topicId}`;
     case "thread":           return `/app/forums:main/thread/${nav.forumId}/${nav.topicId}/${nav.threadId}`;
     default:                 return `/app/forums:main`;
@@ -70,7 +72,11 @@ export default function Forums({ path = [], navigate: platformNavigate }: Props)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data) {
-          setNav({ view: "settings", forumId, forumData: data });
+          const isModerator = data.access === "owner" || data.access === "moderator";
+          setNav(isModerator
+            ? { view: "settings", forumId, forumData: data }
+            : { view: "settings-denied", forumId }
+          );
         } else {
           setNav({ view: "forum", forumId });
         }
@@ -97,6 +103,12 @@ export default function Forums({ path = [], navigate: platformNavigate }: Props)
       )}
       {nav.view === "settings-loading" && (
         <div className={styles.loading}>Loading settings…</div>
+      )}
+      {nav.view === "settings-denied" && (
+        <div className={styles.emptyState}>
+          <span className={styles.emptyStateTitle}>Access denied</span>
+          <span className={styles.emptyStateDesc}>You do not have permission to access settings for this forum.</span>
+        </div>
       )}
       {nav.view === "settings" && (
         <ForumSettings

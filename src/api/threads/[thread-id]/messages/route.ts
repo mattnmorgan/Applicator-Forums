@@ -98,12 +98,10 @@ export async function GET(
       let authorName: string | null = null;
       let profilePicture: string | null = null;
       const u = (await userMgr.readRecord(m.data.authorId)) as any;
-      if (!m.data.removed) {
-        authorName = u?.data.display_name || u?.data.username || null;
-        profilePicture = u?.data.icon
-          ? `/api/system/assets/icons/users/${m.data.authorId}`
-          : null;
-      }
+      authorName = u?.data.display_name || u?.data.username || null;
+      profilePicture = u?.data.icon
+        ? `/api/system/assets/icons/users/${m.data.authorId}`
+        : null;
       const entry: Record<string, unknown> = {
         id: m.id,
         content: m.data.removed ? "" : m.data.content || "",

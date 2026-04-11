@@ -534,7 +534,7 @@ function MessageRow({
 
   async function handleDelete() {
     const res = await fetch(`/api/forums/messages/${message.id}`, { method: "DELETE" });
-    if (res.ok) onDeleted(message.id);
+    if (res.ok) onRemoved(message.id, message.content);
   }
 
   async function handleRemove() {
@@ -563,15 +563,13 @@ function MessageRow({
     <div className={styles.messageRow}>
       <div className={styles.messageRight}>
         <div className={styles.messageSubheader}>
-          {!message.removed && (
-            <span style={{ cursor: "default", pointerEvents: "none" }}>
-              <ProfileIndicator
-                displayName={message.authorName || "?"}
-                profilePicture={message.profilePicture || undefined}
-                size={18}
-              />
-            </span>
-          )}
+          <span style={{ cursor: "default", pointerEvents: "none" }}>
+            <ProfileIndicator
+              displayName={message.authorName || "?"}
+              profilePicture={message.profilePicture || undefined}
+              size={18}
+            />
+          </span>
           <span>{message.createdAt ? new Date(message.createdAt).toLocaleString() : ""}</span>
           {message.edited && !message.removed && (
             <span style={{ color: "#475569" }}>· edited</span>
@@ -635,7 +633,7 @@ function MessageRow({
               </div>
             </div>
           ) : (
-            <div className={styles.messageRemoved}>This message was removed by a moderator.</div>
+            <div className={styles.messageRemoved}>Deleted by moderation or message author</div>
           )
         ) : editing ? (
           <div className={styles.messageEditingArea}>
