@@ -91,18 +91,20 @@ export async function GET(
     (a, b) => a.created_at - b.created_at,
   );
 
+  const isModerator = access.level === "owner" || access.level === "moderator";
+
   const enriched = await Promise.all(
     sorted.map(async (m) => {
       let authorName: string | null = null;
       let profilePicture: string | null = null;
+      const u = (await userMgr.readRecord(m.data.authorId)) as any;
       if (!m.data.removed) {
-        const u = (await userMgr.readRecord(m.data.authorId)) as any;
         authorName = u?.data.display_name || u?.data.username || null;
         profilePicture = u?.data.icon
           ? `/api/system/assets/icons/users/${m.data.authorId}`
           : null;
       }
-      return {
+      const entry: Record<string, unknown> = {
         id: m.id,
         content: m.data.removed ? "" : m.data.content || "",
         authorId: m.data.authorId,
@@ -114,6 +116,11 @@ export async function GET(
         createdAt: m.created_at,
         updatedAt: m.updated_at,
       };
+      // Expose original content to moderators so they can reveal/restore removed messages
+      if (isModerator && m.data.removed) {
+        entry.originalContent = m.data.content || "";
+      }
+      return entry;
     }),
   );
 

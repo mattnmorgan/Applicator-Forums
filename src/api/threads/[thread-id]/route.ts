@@ -40,9 +40,25 @@ export async function PATCH(
     const updates: Partial<ThreadRecord> = {};
     if (body.name !== undefined) updates.name = body.name.trim();
     if (body.description !== undefined) updates.description = body.description.trim();
-    // Only moderators can pin/lock threads
+    // Only moderators can pin/lock/move threads
     if (body.pinned !== undefined && isModerator) updates.pinned = !!body.pinned;
     if (body.locked !== undefined && isModerator) updates.locked = !!body.locked;
+
+    // Move thread to a different topic (moderator only)
+    if (body.topicId !== undefined && isModerator) {
+      const targetTopicId = body.topicId as string;
+      if (targetTopicId === thread.data.topicId) {
+        return NextResponse.json({ error: "Thread is already in that topic" }, { status: 400 });
+      }
+      const targetTopic = await context.recordManager<TopicRecord>("forums", "topic").readRecord(targetTopicId);
+      if (!targetTopic) {
+        return NextResponse.json({ error: "Target topic not found" }, { status: 404 });
+      }
+      if (targetTopic.data.forumId !== thread.data.forumId) {
+        return NextResponse.json({ error: "Target topic is in a different forum" }, { status: 400 });
+      }
+      updates.topicId = targetTopicId;
+    }
 
     const table = await threads.getTable();
     const updated = await threads.updateRecord(table, threadId, updates);
@@ -85,9 +101,11 @@ export async function DELETE(
 
   try {
     const messages = context.recordManager("forums", "message");
+    const threadAccess = context.recordManager("forums", "thread_access");
 
     await context.withTransaction(async (client) => {
       await messages.deleteFilteredRecords({ fields: { threadId } }, { client });
+      await threadAccess.deleteFilteredRecords({ fields: { threadId } }, { client });
       await threads.deleteRecord(threadId, { client });
     });
 

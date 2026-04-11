@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import { Modal, Button } from "@applicator/sdk/components";
+import { useState } from "react";
+import { Modal, Button, ImageUpload } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
 
 interface Props {
@@ -16,14 +16,6 @@ export default function CreateForumModal({ onClose, onCreated }: Props) {
   const [pendingIcon, setPendingIcon] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleIconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPendingIcon(file);
-    setIconPreview(URL.createObjectURL(file));
-  };
 
   const handleSubmit = async () => {
     if (!name.trim()) { setError("Name is required"); return; }
@@ -75,26 +67,12 @@ export default function CreateForumModal({ onClose, onCreated }: Props) {
           <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div>
         )}
         <div className={styles.formRow}>
-          <label className={styles.formLabel}>Icon</label>
-          <div className={styles.iconUploadArea}>
-            {iconPreview ? (
-              <img src={iconPreview} alt="" className={styles.iconPreview} />
-            ) : (
-              <div className={styles.iconPreviewPlaceholder}>
-                <span style={{ fontSize: 11, color: "#475569" }}>None</span>
-              </div>
-            )}
-            <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
-              Choose Image
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={handleIconChange}
-            />
-          </div>
+          <ImageUpload
+            label="Icon"
+            value={iconPreview}
+            onChange={setIconPreview}
+            onFileSelect={setPendingIcon}
+          />
         </div>
         <div className={styles.formRow}>
           <label className={styles.formLabel}>Forum Name</label>

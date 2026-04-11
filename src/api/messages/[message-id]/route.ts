@@ -4,7 +4,7 @@ import { MessageRecord } from "@/src/types/MessageRecord";
 import { ThreadRecord } from "@/src/types/ThreadRecord";
 import { getForumAccess, canModerate } from "@/src/lib/forum-access";
 
-// PATCH /api/forums/messages/:messageId — edit a message
+// PATCH /api/forums/messages/:messageId — edit a message, or restore a removed message (moderator)
 export async function PATCH(
   req: NextRequest,
   context: ApiContext,
@@ -13,13 +13,12 @@ export async function PATCH(
   const { messageId } = params;
   const messages = context.recordManager<MessageRecord>("forums", "message");
   const message = await messages.readRecord(messageId);
-  if (!message) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (message.data.removed) {
-    return NextResponse.json({ error: "Cannot edit a removed message" }, { status: 400 });
-  }
+  if (!message)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await getForumAccess(context, message.data.forumId);
-  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!access)
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
   const user = await context.user();
   const isModerator = canModerate(access.level);
@@ -29,19 +28,45 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Check if thread is locked (authors cannot edit in locked threads)
-  if (!isModerator) {
-    const threads = context.recordManager<ThreadRecord>("forums", "thread");
-    const thread = await threads.readRecord(message.data.threadId);
-    if (thread?.data.locked) {
-      return NextResponse.json({ error: "Forbidden — this thread is locked" }, { status: 403 });
-    }
-  }
-
   try {
     const body = await req.json();
+
+    // Restore a removed message (moderator only)
+    if (body.restore === true) {
+      if (!isModerator) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      const table = await messages.getTable();
+      const updated = await messages.updateRecord(table, messageId, {
+        removed: false,
+      });
+      return NextResponse.json({ id: updated.id, ...updated.data });
+    }
+
+    if (message.data.removed) {
+      return NextResponse.json(
+        { error: "Cannot edit a removed message" },
+        { status: 400 },
+      );
+    }
+
+    // Check if thread is locked (authors cannot edit in locked threads)
+    if (!isModerator) {
+      const threads = context.recordManager<ThreadRecord>("forums", "thread");
+      const thread = await threads.readRecord(message.data.threadId);
+      if (thread?.data.locked) {
+        return NextResponse.json(
+          { error: "Forbidden — this thread is locked" },
+          { status: 403 },
+        );
+      }
+    }
+
     if (body.content !== undefined && !body.content?.trim()) {
-      return NextResponse.json({ error: "Content cannot be empty" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Content cannot be empty" },
+        { status: 400 },
+      );
     }
 
     const table = await messages.getTable();
@@ -70,10 +95,12 @@ export async function DELETE(
   const { messageId } = params;
   const messages = context.recordManager<MessageRecord>("forums", "message");
   const message = await messages.readRecord(messageId);
-  if (!message) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!message)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await getForumAccess(context, message.data.forumId);
-  if (!access) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  if (!access)
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
   const user = await context.user();
   const isModerator = canModerate(access.level);
@@ -88,24 +115,23 @@ export async function DELETE(
     const threads = context.recordManager<ThreadRecord>("forums", "thread");
     const thread = await threads.readRecord(message.data.threadId);
     if (thread?.data.locked) {
-      return NextResponse.json({ error: "Forbidden — this thread is locked" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Forbidden — this thread is locked" },
+        { status: 403 },
+      );
     }
   }
 
   try {
     const table = await messages.getTable();
 
-    if (isModerator && !isAuthor) {
-      // Soft-delete: replace with "removed" system message
+    if (isModerator || isAuthor) {
+      // Soft-delete: mark as removed but preserve content so moderators can reveal/restore it
       await messages.updateRecord(table, messageId, {
-        content: "",
         removed: true,
         edited: false,
         editedAt: null,
       });
-    } else {
-      // Hard-delete by the author
-      await messages.deleteRecord(messageId);
     }
 
     return NextResponse.json({ success: true });

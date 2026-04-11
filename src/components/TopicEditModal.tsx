@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { Modal, Button, ButtonIcon, ProfileIndicator, SearchableCombobox, Icon } from "@applicator/sdk/components";
+import { useState, useEffect } from "react";
+import { Modal, Button, ButtonIcon, ProfileIndicator, SearchableCombobox, Icon, ImageUpload } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
 import { SystemUser } from "@/src/types/SystemUser";
 

@@ -8,6 +8,7 @@ import EditThreadModal from "./EditThreadModal";
 interface MessageSummary {
   id: string;
   content: string;
+  originalContent?: string;
   authorId: string;
   authorName: string | null;
   profilePicture: string | null;
@@ -130,10 +131,22 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
     });
   };
 
-  const handleMessageRemoved = (msgId: string) => {
+  const handleMessageRemoved = (msgId: string, originalContent: string) => {
     setData((prev) => {
       if (!prev) return prev;
-      return { ...prev, messages: prev.messages.map((m) => m.id === msgId ? { ...m, removed: true, content: "" } : m) };
+      return { ...prev, messages: prev.messages.map((m) => m.id === msgId ? { ...m, removed: true, content: "", originalContent } : m) };
+    });
+  };
+
+  const handleMessageRestored = (msgId: string) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        messages: prev.messages.map((m) =>
+          m.id === msgId ? { ...m, removed: false, content: m.originalContent || "", originalContent: undefined } : m
+        ),
+      };
     });
   };
 
@@ -417,6 +430,7 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
               onUpdated={handleMessageUpdated}
               onDeleted={handleMessageDeleted}
               onRemoved={handleMessageRemoved}
+              onRestored={handleMessageRestored}
             />
           ))}
         </div>
@@ -477,6 +491,7 @@ function MessageRow({
   onUpdated,
   onDeleted,
   onRemoved,
+  onRestored,
 }: {
   message: MessageSummary;
   currentUserId: string;
@@ -485,7 +500,8 @@ function MessageRow({
   topicLocked: boolean;
   onUpdated: (m: MessageSummary) => void;
   onDeleted: (id: string) => void;
-  onRemoved: (id: string) => void;
+  onRemoved: (id: string, originalContent: string) => void;
+  onRestored: (id: string) => void;
 }) {
   const isAuthor = message.authorId === currentUserId;
   const canEdit = (isAuthor || canModerate) && !message.removed && (!threadLocked || canModerate) && (!topicLocked || canModerate);
@@ -493,6 +509,10 @@ function MessageRow({
   const [editing, setEditing] = useState(false);
   const [editHtml, setEditHtml] = useState(message.content);
   const [saving, setSaving] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  const revealedContent = message.originalContent ?? message.content;
 
   async function handleSaveEdit() {
     if (!editHtml.trim()) return;
@@ -519,7 +539,24 @@ function MessageRow({
 
   async function handleRemove() {
     const res = await fetch(`/api/forums/messages/${message.id}`, { method: "DELETE" });
-    if (res.ok) onRemoved(message.id);
+    if (res.ok) onRemoved(message.id, message.content);
+  }
+
+  async function handleRestore() {
+    setRestoring(true);
+    try {
+      const res = await fetch(`/api/forums/messages/${message.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restore: true }),
+      });
+      if (res.ok) {
+        setRevealed(false);
+        onRestored(message.id);
+      }
+    } finally {
+      setRestoring(false);
+    }
   }
 
   return (
@@ -539,8 +576,28 @@ function MessageRow({
           {message.edited && !message.removed && (
             <span style={{ color: "#475569" }}>· edited</span>
           )}
-          {(canEdit || canDelete) && !editing && (
+          {!editing && (
             <div className={styles.messageSubheaderActions} onClick={(e) => e.stopPropagation()}>
+              {message.removed && canModerate && (
+                <>
+                  <ButtonIcon
+                    name={revealed ? "eye-off" : "eye"}
+                    iconSize={12}
+                    label={revealed ? "Hide message" : "Reveal message"}
+                    onClick={() => setRevealed((v) => !v)}
+                    active={revealed}
+                    placement="top"
+                  />
+                  <ButtonIcon
+                    name="refresh"
+                    iconSize={12}
+                    label={restoring ? "Restoring…" : "Restore message"}
+                    onClick={handleRestore}
+                    subvariant="info"
+                    placement="top"
+                  />
+                </>
+              )}
               {canEdit && (
                 <ButtonIcon
                   name="edit"
@@ -565,7 +622,21 @@ function MessageRow({
         </div>
 
         {message.removed ? (
-          <div className={styles.messageRemoved}>This message was removed by a moderator.</div>
+          revealed ? (
+            <div>
+              <div className={styles.messageRemovedBanner}>
+                <Icon name="eye" size={12} /> Removed — showing original content
+              </div>
+              <div className={styles.messageContent}>
+                <RichTextViewer
+                  html={revealedContent}
+                  style={{ fontSize: "14px", color: "#94a3b8", lineHeight: "1.6" }}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className={styles.messageRemoved}>This message was removed by a moderator.</div>
+          )
         ) : editing ? (
           <div className={styles.messageEditingArea}>
             <RichTextEditor

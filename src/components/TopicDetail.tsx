@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { ButtonIcon, Icon } from "@applicator/sdk/components";
+import { ButtonIcon, Icon, Modal, Button } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
 import NewThreadModal from "./NewThreadModal";
 
@@ -56,6 +56,7 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
   const [accessError, setAccessError] = useState(false);
   const [page, setPage] = useState(1);
   const [showNewThread, setShowNewThread] = useState(false);
+  const [movingThreadId, setMovingThreadId] = useState<string | null>(null);
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
@@ -77,6 +78,19 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
   const handleThreadCreated = (thread: any) => {
     setShowNewThread(false);
     onNavigateToThread(thread.id);
+  };
+
+  const handleThreadMoved = (threadId: string) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        pinned: prev.pinned.filter((t) => t.id !== threadId),
+        threads: prev.threads.filter((t) => t.id !== threadId),
+        total: prev.total - 1,
+      };
+    });
+    setMovingThreadId(null);
   };
 
   const handleTopicLock = async () => {
@@ -164,7 +178,9 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
               <ThreadRowItem
                 key={t.id}
                 thread={t}
+                canModerate={canModerate}
                 onClick={() => onNavigateToThread(t.id)}
+                onMove={() => setMovingThreadId(t.id)}
               />
             ))}
           </div>
@@ -186,7 +202,9 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
             <ThreadRowItem
               key={t.id}
               thread={t}
+              canModerate={canModerate}
               onClick={() => onNavigateToThread(t.id)}
+              onMove={() => setMovingThreadId(t.id)}
             />
           ))}
         </div>
@@ -218,16 +236,30 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
         />
       )}
 
+      {movingThreadId && (
+        <MoveThreadModal
+          threadId={movingThreadId}
+          currentTopicId={topicId}
+          forumId={topic.forumId}
+          onClose={() => setMovingThreadId(null)}
+          onMoved={handleThreadMoved}
+        />
+      )}
+
     </>
   );
 }
 
 function ThreadRowItem({
   thread,
+  canModerate,
   onClick,
+  onMove,
 }: {
   thread: ThreadSummary;
+  canModerate: boolean;
   onClick: () => void;
+  onMove: () => void;
 }) {
   const createdDate = thread.createdAt ? new Date(thread.createdAt).toLocaleDateString() : "";
   const isUnread = thread.messageCount > 0
@@ -278,6 +310,118 @@ function ThreadRowItem({
         )}
       </div>
 
+      {canModerate && (
+        <div className={styles.threadRowActions} onClick={(e) => e.stopPropagation()}>
+          <ButtonIcon
+            name="move"
+            iconSize={12}
+            label="Move thread"
+            onClick={onMove}
+            placement="top"
+          />
+        </div>
+      )}
+
     </div>
+  );
+}
+
+function MoveThreadModal({
+  threadId,
+  currentTopicId,
+  forumId,
+  onClose,
+  onMoved,
+}: {
+  threadId: string;
+  currentTopicId: string;
+  forumId: string;
+  onClose: () => void;
+  onMoved: (threadId: string) => void;
+}) {
+  const [topics, setTopics] = useState<{ id: string; name: string; sectionId: string | null }[]>([]);
+  const [sections, setSections] = useState<{ id: string; name: string }[]>([]);
+  const [selectedTopicId, setSelectedTopicId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch(`/api/forums/forums/${forumId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setSections(data.sections || []);
+        setTopics((data.topics || []).filter((t: any) => t.id !== currentTopicId));
+      })
+      .finally(() => setLoading(false));
+  }, [forumId, currentTopicId]);
+
+  const handleMove = async () => {
+    if (!selectedTopicId) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/forums/threads/${threadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topicId: selectedTopicId }),
+      });
+      if (res.ok) {
+        onMoved(threadId);
+      } else {
+        const err = await res.json();
+        setError(err.error || "Failed to move thread");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Group topics by section for display
+  const sectionMap = new Map(sections.map((s) => [s.id, s.name]));
+
+  return (
+    <Modal
+      header={<span className={styles.modalTitle}>Move Thread</span>}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleMove} disabled={saving || !selectedTopicId}>
+            {saving ? "Moving…" : "Move"}
+          </Button>
+        </>
+      }
+      closeable
+      onClose={onClose}
+      maxWidth={400}
+    >
+      <div style={{ padding: 16 }}>
+        {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+        {loading ? (
+          <div style={{ color: "#64748b", fontSize: 13 }}>Loading topics…</div>
+        ) : topics.length === 0 ? (
+          <div style={{ color: "#64748b", fontSize: 13 }}>No other topics available.</div>
+        ) : (
+          <div className={styles.formRow}>
+            <label className={styles.formLabel}>Destination Topic</label>
+            <select
+              className={styles.formInput}
+              value={selectedTopicId}
+              onChange={(e) => setSelectedTopicId(e.target.value)}
+            >
+              <option value="">Select a topic…</option>
+              {topics.map((t) => {
+                const sectionName = t.sectionId ? sectionMap.get(t.sectionId) : null;
+                return (
+                  <option key={t.id} value={t.id}>
+                    {sectionName ? `${sectionName} / ${t.name}` : t.name}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }

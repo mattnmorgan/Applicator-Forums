@@ -93,8 +93,10 @@ export async function DELETE(
   try {
     const messages = context.recordManager("forums", "message");
     const threads = context.recordManager("forums", "thread");
+    const threadAccess = context.recordManager("forums", "thread_access");
+    const topicAccess = context.recordManager("forums", "topic_access");
 
-    // Get all thread IDs in this topic to delete their messages
+    // Get all thread IDs in this topic to delete their messages and access records
     const threadsResult = await threads.readRecords({ fields: { topicId }, limit: 2000 });
     const threadIds = threadsResult.records.map((t) => t.id);
 
@@ -104,7 +106,12 @@ export async function DELETE(
           { filters: [{ field: "threadId", operator: "IN", value: threadIds }] },
           { client },
         );
+        await threadAccess.deleteFilteredRecords(
+          { filters: [{ field: "threadId", operator: "IN", value: threadIds }] },
+          { client },
+        );
       }
+      await topicAccess.deleteFilteredRecords({ fields: { topicId } }, { client });
       await threads.deleteFilteredRecords({ fields: { topicId } }, { client });
       await topics.deleteRecord(topicId, { client });
     });

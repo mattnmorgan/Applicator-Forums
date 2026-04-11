@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { ButtonIcon, Icon } from "@applicator/sdk/components";
+import { ButtonIcon, Icon, Modal, Button } from "@applicator/sdk/components";
 import styles from "@/src/apps/Forums.module.css";
 import TopicEditModal from "./TopicEditModal";
 
@@ -53,6 +53,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState("");
+  const [movingTopicId, setMovingTopicId] = useState<string | null>(null);
 
   // Drag state for sections
   const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
@@ -148,6 +149,14 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
   const handleTopicUpdated = (updated: TopicSummary) => {
     setForum((prev) => prev ? { ...prev, topics: prev.topics.map((t) => t.id === updated.id ? updated : t) } : prev);
     setEditingTopicId(null);
+  };
+
+  const handleTopicMoved = (topicId: string, newSectionId: string | null) => {
+    setForum((prev) => {
+      if (!prev) return prev;
+      return { ...prev, topics: prev.topics.map((t) => t.id === topicId ? { ...t, sectionId: newSectionId } : t) };
+    });
+    setMovingTopicId(null);
   };
 
   const handleDeleteTopic = async (topicId: string) => {
@@ -384,6 +393,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
                   key={topic.id}
                   topic={topic}
                   editMode={editMode}
+                  canModerate={canModerate}
                   isDragging={draggingTopicId === topic.id}
                   isDragOver={dragOverTopicId === topic.id}
                   onClick={() => !editMode && onNavigateToTopic(topic.id)}
@@ -393,6 +403,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
                   onDragEnd={() => { setDraggingTopicId(null); setDragOverTopicId(null); setDragOverSectionDropId(null); }}
                   onEdit={() => setEditingTopicId(topic.id)}
                   onDelete={() => handleDeleteTopic(topic.id)}
+                  onMove={() => setMovingTopicId(topic.id)}
                 />
               ))}
 
@@ -442,6 +453,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
                   key={topic.id}
                   topic={topic}
                   editMode={editMode}
+                  canModerate={canModerate}
                   isDragging={draggingTopicId === topic.id}
                   isDragOver={dragOverTopicId === topic.id}
                   onClick={() => !editMode && onNavigateToTopic(topic.id)}
@@ -451,6 +463,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
                   onDragEnd={() => { setDraggingTopicId(null); setDragOverTopicId(null); setDragOverSectionDropId(null); }}
                   onEdit={() => setEditingTopicId(topic.id)}
                   onDelete={() => handleDeleteTopic(topic.id)}
+                  onMove={() => setMovingTopicId(topic.id)}
                 />
               ))}
 
@@ -500,6 +513,16 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
           onUpdated={handleTopicUpdated}
         />
       )}
+
+      {movingTopicId && forum && (
+        <MoveTopicSectionModal
+          topicId={movingTopicId}
+          currentSectionId={forum.topics.find((t) => t.id === movingTopicId)?.sectionId ?? null}
+          sections={forum.sections}
+          onClose={() => setMovingTopicId(null)}
+          onMoved={handleTopicMoved}
+        />
+      )}
     </>
   );
 }
@@ -507,6 +530,7 @@ export default function ForumDetail({ forumId, onBack, onNavigateToTopic, onNavi
 function TopicRowItem({
   topic,
   editMode,
+  canModerate,
   isDragging,
   isDragOver,
   onClick,
@@ -516,9 +540,11 @@ function TopicRowItem({
   onDragEnd,
   onEdit,
   onDelete,
+  onMove,
 }: {
   topic: TopicSummary;
   editMode: boolean;
+  canModerate: boolean;
   isDragging: boolean;
   isDragOver: boolean;
   onClick: () => void;
@@ -528,6 +554,7 @@ function TopicRowItem({
   onDragEnd: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onMove: () => void;
 }) {
   const cls = [
     styles.topicRow,
@@ -593,6 +620,85 @@ function TopicRowItem({
           <ButtonIcon name="trash" iconSize={12} label="Delete topic" onClick={onDelete} subvariant="danger" size="sm" placement="bottom" />
         </div>
       )}
+      {!editMode && canModerate && (
+        <div className={styles.topicRowHoverActions} onClick={(e) => e.stopPropagation()}>
+          <ButtonIcon name="move" iconSize={12} label="Move to section" onClick={onMove} size="sm" placement="bottom" />
+        </div>
+      )}
     </div>
+  );
+}
+
+function MoveTopicSectionModal({
+  topicId,
+  currentSectionId,
+  sections,
+  onClose,
+  onMoved,
+}: {
+  topicId: string;
+  currentSectionId: string | null;
+  sections: SectionSummary[];
+  onClose: () => void;
+  onMoved: (topicId: string, newSectionId: string | null) => void;
+}) {
+  const [selectedSectionId, setSelectedSectionId] = useState<string>(currentSectionId ?? "__none__");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleMove = async () => {
+    const newSectionId = selectedSectionId === "__none__" ? null : selectedSectionId;
+    if (newSectionId === currentSectionId) { onClose(); return; }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/forums/topics/${topicId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sectionId: newSectionId }),
+      });
+      if (res.ok) {
+        onMoved(topicId, newSectionId);
+      } else {
+        const err = await res.json();
+        setError(err.error || "Failed to move topic");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      header={<span className={styles.modalTitle}>Move Topic to Section</span>}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleMove} disabled={saving}>
+            {saving ? "Moving…" : "Move"}
+          </Button>
+        </>
+      }
+      closeable
+      onClose={onClose}
+      maxWidth={360}
+    >
+      <div style={{ padding: 16 }}>
+        {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+        <div className={styles.formRow}>
+          <label className={styles.formLabel}>Destination Section</label>
+          <select
+            className={styles.formInput}
+            value={selectedSectionId}
+            onChange={(e) => setSelectedSectionId(e.target.value)}
+          >
+            <option value="__none__">No section (unsectioned)</option>
+            {sections.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </Modal>
   );
 }

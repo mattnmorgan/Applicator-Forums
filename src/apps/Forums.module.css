@@ -345,6 +345,16 @@
   flex-shrink: 0;
 }
 
+.topicRowHoverActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.topicRow:hover .topicRowHoverActions { opacity: 1; }
+
 .dragHandle {
   color: #475569;
   cursor: grab;
@@ -569,6 +579,18 @@
   color: #475569;
   font-style: italic;
   padding: 8px;
+}
+
+.messageRemovedBanner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #64748b;
+  font-style: italic;
+  padding: 4px 8px;
+  background: rgba(100, 116, 139, 0.08);
+  border-bottom: 1px solid #1e3a5f;
 }
 
 .messageEditingArea {

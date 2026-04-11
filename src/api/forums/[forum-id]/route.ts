@@ -176,9 +176,13 @@ export async function DELETE(
     const topics = context.recordManager("forums", "topic");
     const sections = context.recordManager("forums", "section");
     const forums = context.recordManager<ForumRecord>("forums", "forum");
+    const threadAccess = context.recordManager("forums", "thread_access");
+    const topicAccess = context.recordManager("forums", "topic_access");
 
     await context.withTransaction(async (client) => {
       await messages.deleteFilteredRecords({ fields: { forumId } }, { client });
+      await threadAccess.deleteFilteredRecords({ fields: { forumId } }, { client });
+      await topicAccess.deleteFilteredRecords({ fields: { forumId } }, { client });
       await threads.deleteFilteredRecords({ fields: { forumId } }, { client });
       await topics.deleteFilteredRecords({ fields: { forumId } }, { client });
       await sections.deleteFilteredRecords({ fields: { forumId } }, { client });
