@@ -4,6 +4,7 @@ import { ThreadRecord } from "@/src/types/ThreadRecord";
 import { TopicRecord } from "@/src/types/TopicRecord";
 import { MessageRecord } from "@/src/types/MessageRecord";
 import { ThreadAccessRecord } from "@/src/types/ThreadAccessRecord";
+import { ThreadSubscriptionRecord } from "@/src/types/ThreadSubscriptionRecord";
 import { getForumAccess, canPost, canModerate, canUserAccessTopic, getUserAuthorityId } from "@/src/lib/forum-access";
 
 async function upsertThreadAccess(
@@ -125,6 +126,20 @@ export async function GET(
   const topics = context.recordManager<TopicRecord>("forums", "topic");
   const topic = await topics.readRecord(thread.data.topicId);
 
+  // Check thread subscription status (thread creators cannot subscribe)
+  let isSubscribed = false;
+  if (thread.data.createdBy !== access.userId) {
+    const subsRm = context.recordManager<ThreadSubscriptionRecord>("forums", "thread_subscription");
+    const subResult = await subsRm.readRecords({
+      filters: [
+        { field: "threadId", operator: "=", value: threadId },
+        { field: "userId", operator: "=", value: access.userId },
+      ],
+      limit: 1,
+    });
+    isSubscribed = subResult.records.length > 0;
+  }
+
   const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
 
   return NextResponse.json({
@@ -151,6 +166,7 @@ export async function GET(
     },
     access: access.level,
     currentUserId: access.userId,
+    isSubscribed,
     messages: enriched,
     total: result.total,
     page,
@@ -254,18 +270,61 @@ export async function POST(
 
     const userMgr = context.recordManager("system", "users");
     const u = (await userMgr.readRecord(user!.id)) as any;
+    const posterName = u?.data.display_name || u?.data.username || "Someone";
+    const threadUrl = `/app/forums:main/thread/${thread.data.forumId}/${thread.data.topicId}/${threadId}`;
+
+    // Auto-subscribe the poster to the thread if they are not the thread creator
+    if (thread.data.createdBy !== user!.id) {
+      const subsRm = context.recordManager<ThreadSubscriptionRecord>("forums", "thread_subscription");
+      const existingSub = await subsRm.readRecords({
+        filters: [
+          { field: "threadId", operator: "=", value: threadId },
+          { field: "userId", operator: "=", value: user!.id },
+        ],
+        limit: 1,
+      });
+      if (existingSub.records.length === 0) {
+        const subTable = await subsRm.getTable();
+        await subsRm.createRecord(subTable, {
+          threadId,
+          topicId: thread.data.topicId,
+          forumId: thread.data.forumId,
+          userId: user!.id,
+        });
+      }
+    }
 
     // Notify the thread creator if someone else replied
     if (thread.data.createdBy !== user!.id) {
-      const posterName = u?.data.display_name || u?.data.username || "Someone";
       context
         .sendNotification({
           userId: thread.data.createdBy,
           type: "info",
           title: "New reply to your thread",
           message: `${posterName} replied to "${thread.data.name}" in ${topic?.data.name ?? "a topic"}`,
-          url: `/app/forums:main/thread/${thread.data.forumId}/${thread.data.topicId}/${threadId}`,
+          url: threadUrl,
           topicId: "forums:thread-reply",
+        })
+        .catch(() => {});
+    }
+
+    // Notify thread subscribers (excluding the thread creator and the poster) with reply-created
+    const subsRm = context.recordManager<ThreadSubscriptionRecord>("forums", "thread_subscription");
+    const subsResult = await subsRm.readRecords({
+      filters: [{ field: "threadId", operator: "=", value: threadId }],
+      limit: 500,
+    });
+    for (const sub of subsResult.records) {
+      if (sub.data.userId === user!.id) continue; // don't notify the poster
+      if (sub.data.userId === thread.data.createdBy) continue; // creator gets thread-reply instead
+      context
+        .sendNotification({
+          userId: sub.data.userId,
+          type: "info",
+          title: "New reply in a thread you follow",
+          message: `${posterName} replied to "${thread.data.name}" in ${topic?.data.name ?? "a topic"} (${access.forum.data.name})`,
+          url: threadUrl,
+          topicId: "forums:reply-created",
         })
         .catch(() => {});
     }

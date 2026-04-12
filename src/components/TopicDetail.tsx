@@ -36,6 +36,7 @@ interface PageData {
   topic: TopicInfo;
   access: string;
   currentUserId: string;
+  isSubscribed: boolean;
   pinned: ThreadSummary[];
   threads: ThreadSummary[];
   total: number;
@@ -57,6 +58,7 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
   const [page, setPage] = useState(1);
   const [showNewThread, setShowNewThread] = useState(false);
   const [movingThreadId, setMovingThreadId] = useState<string | null>(null);
+  const [subscribing, setSubscribing] = useState(false);
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
@@ -91,6 +93,24 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
       };
     });
     setMovingThreadId(null);
+  };
+
+  const handleToggleSubscription = async () => {
+    if (!data || subscribing) return;
+    setSubscribing(true);
+    try {
+      const newSubscribed = !data.isSubscribed;
+      const res = await fetch(`/api/forums/topics/${topicId}/subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscribed: newSubscribed }),
+      });
+      if (res.ok) {
+        setData((prev) => prev ? { ...prev, isSubscribed: newSubscribed } : prev);
+      }
+    } finally {
+      setSubscribing(false);
+    }
   };
 
   const handleTopicLock = async () => {
@@ -147,6 +167,14 @@ export default function TopicDetail({ topicId, onBack, onNavigateToThread, onNav
         </span>
 
         <div className={styles.headerActions}>
+          <ButtonIcon
+            name={data?.isSubscribed ? "eye-off" : "eye"}
+            iconSize={14}
+            label={data?.isSubscribed ? "Unsubscribe from topic" : "Subscribe to topic"}
+            onClick={handleToggleSubscription}
+            disabled={subscribing}
+            placement="bottom"
+          />
           {canPost && !topic.locked && (
             <ButtonIcon
               name="plus"

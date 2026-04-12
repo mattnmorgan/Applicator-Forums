@@ -5,6 +5,8 @@ import { ThreadRecord } from "@/src/types/ThreadRecord";
 import { MessageRecord } from "@/src/types/MessageRecord";
 import { ThreadAccessRecord } from "@/src/types/ThreadAccessRecord";
 import { TopicAccessRecord } from "@/src/types/TopicAccessRecord";
+import { TopicSubscriptionRecord } from "@/src/types/TopicSubscriptionRecord";
+import { ThreadSubscriptionRecord } from "@/src/types/ThreadSubscriptionRecord";
 import { getForumAccess, canPost, canModerate, canUserAccessTopic, getUserAuthorityId } from "@/src/lib/forum-access";
 
 async function upsertTopicAccess(
@@ -82,6 +84,17 @@ export async function GET(
   // Mark the user as having visited this topic (for forum-level unread indicator)
   upsertTopicAccess(context, topicId, topic.data.forumId, access.userId).catch(() => {});
 
+  // Check topic subscription status for current user
+  const subsRm = context.recordManager<TopicSubscriptionRecord>("forums", "topic_subscription");
+  const subResult = await subsRm.readRecords({
+    filters: [
+      { field: "topicId", operator: "=", value: topicId },
+      { field: "userId", operator: "=", value: access.userId },
+    ],
+    limit: 1,
+  });
+  const isSubscribed = subResult.records.length > 0;
+
   // Load all thread_access records for the current user in this topic
   const accessResult = await accessRm.readRecords({
     filters: [
@@ -152,6 +165,7 @@ export async function GET(
     },
     access: access.level,
     currentUserId: access.userId,
+    isSubscribed,
     pinned,
     threads: unpinned,
     total: totalUnpinned,
@@ -232,6 +246,30 @@ export async function POST(
         lastPostDate: now,
         lastPostUserId: user!.id,
       });
+    }
+
+    // Auto-subscribe the thread creator to their own thread (via thread_subscription)
+    // is intentionally skipped — they receive thread-reply notifications as creator.
+
+    // Notify topic subscribers about the new thread
+    const subsRm = context.recordManager<TopicSubscriptionRecord>("forums", "topic_subscription");
+    const subsResult = await subsRm.readRecords({
+      filters: [{ field: "topicId", operator: "=", value: topicId }],
+      limit: 500,
+    });
+    const threadUrl = `/app/forums:main/thread/${topic.data.forumId}/${topicId}/${record.id}`;
+    for (const sub of subsResult.records) {
+      if (sub.data.userId === user!.id) continue; // don't notify the creator
+      context
+        .sendNotification({
+          userId: sub.data.userId,
+          type: "info",
+          title: "New thread in a topic you follow",
+          message: `"${body.name.trim()}" was posted in ${topic.data.name} (${access.forum.data.name})`,
+          url: threadUrl,
+          topicId: "forums:thread-created",
+        })
+        .catch(() => {});
     }
 
     return NextResponse.json({ id: record.id, ...record.data }, { status: 201 });

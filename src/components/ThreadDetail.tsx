@@ -36,6 +36,7 @@ interface PageData {
   forum: { id: string; name: string; hasIcon?: boolean };
   access: string;
   currentUserId: string;
+  isSubscribed: boolean;
   messages: MessageSummary[];
   total: number;
   page: number;
@@ -60,6 +61,7 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
   const [editingThread, setEditingThread] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -105,7 +107,9 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
         setReplyHtml("");
         setData((prev) => {
           if (!prev) return prev;
-          return { ...prev, messages: [...prev.messages, msg], total: prev.total + 1 };
+          // Auto-subscribe: if the user isn't the thread creator, they are now subscribed
+          const autoSubscribed = prev.thread.createdBy !== prev.currentUserId ? true : prev.isSubscribed;
+          return { ...prev, messages: [...prev.messages, msg], total: prev.total + 1, isSubscribed: autoSubscribed };
         });
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
       } else {
@@ -148,6 +152,24 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
         ),
       };
     });
+  };
+
+  const handleToggleSubscription = async () => {
+    if (!data || subscribing) return;
+    setSubscribing(true);
+    try {
+      const newSubscribed = !data.isSubscribed;
+      const res = await fetch(`/api/forums/threads/${threadId}/subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscribed: newSubscribed }),
+      });
+      if (res.ok) {
+        setData((prev) => prev ? { ...prev, isSubscribed: newSubscribed } : prev);
+      }
+    } finally {
+      setSubscribing(false);
+    }
   };
 
   const handleToggleLock = async () => {
@@ -356,6 +378,16 @@ export default function ThreadDetail({ threadId, onBack, onNavigateToForum, onNa
             </>
           ) : (
             <>
+              {!isCreator && (
+                <ButtonIcon
+                  name={data?.isSubscribed ? "eye-off" : "eye"}
+                  iconSize={14}
+                  label={data?.isSubscribed ? "Unsubscribe from thread" : "Subscribe to thread"}
+                  onClick={handleToggleSubscription}
+                  disabled={subscribing}
+                  placement="bottom"
+                />
+              )}
               <ButtonIcon
                 name="print"
                 iconSize={14}

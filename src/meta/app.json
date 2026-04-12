@@ -4,7 +4,7 @@
   "version": {
     "major": 1,
     "minor": 3,
-    "dev": 3
+    "dev": 4
   },
   "author": "Matthew Morgan",
   "contactEmail": "matthew@morgantech.info",
@@ -261,6 +261,67 @@
       ]
     },
     {
+      "name": "topic_subscription",
+      "description": "Tracks which users have subscribed to a topic for thread-created notifications",
+      "fields": [
+        {
+          "name": "topicId",
+          "type": "relationship",
+          "relatedTo": "topic",
+          "required": true,
+          "description": "The subscribed topic"
+        },
+        {
+          "name": "forumId",
+          "type": "relationship",
+          "relatedTo": "forum",
+          "required": true,
+          "description": "Parent forum (denormalized)"
+        },
+        {
+          "name": "userId",
+          "type": "relationship",
+          "relatedTo": "system:users",
+          "required": true,
+          "description": "The subscribing user"
+        }
+      ]
+    },
+    {
+      "name": "thread_subscription",
+      "description": "Tracks which users have subscribed to a thread for reply-created notifications",
+      "fields": [
+        {
+          "name": "threadId",
+          "type": "relationship",
+          "relatedTo": "thread",
+          "required": true,
+          "description": "The subscribed thread"
+        },
+        {
+          "name": "topicId",
+          "type": "relationship",
+          "relatedTo": "topic",
+          "required": true,
+          "description": "Parent topic (denormalized)"
+        },
+        {
+          "name": "forumId",
+          "type": "relationship",
+          "relatedTo": "forum",
+          "required": true,
+          "description": "Parent forum (denormalized)"
+        },
+        {
+          "name": "userId",
+          "type": "relationship",
+          "relatedTo": "system:users",
+          "required": true,
+          "description": "The subscribing user"
+        }
+      ]
+    },
+    {
       "name": "message",
       "description": "A rich-text message within a thread",
       "fields": [
@@ -508,6 +569,26 @@
       "path": "topics/[topic-id]/access/[access-id]",
       "method": "DELETE",
       "description": "Remove a topic access entry"
+    },
+    {
+      "path": "topics/[topic-id]/subscription",
+      "method": "GET",
+      "description": "Get topic subscription status"
+    },
+    {
+      "path": "topics/[topic-id]/subscription",
+      "method": "POST",
+      "description": "Toggle topic subscription"
+    },
+    {
+      "path": "threads/[thread-id]/subscription",
+      "method": "GET",
+      "description": "Get thread subscription status"
+    },
+    {
+      "path": "threads/[thread-id]/subscription",
+      "method": "POST",
+      "description": "Toggle thread subscription"
     }
   ],
   "notificationTopics": [
@@ -515,6 +596,18 @@
       "id": "thread-reply",
       "name": "Thread Reply",
       "summary": "Sent when someone posts a reply to a thread you created",
+      "ntfyTag": "speech_balloon"
+    },
+    {
+      "id": "thread-created",
+      "name": "Thread Created",
+      "summary": "Sent when a new thread is created in a topic you follow",
+      "ntfyTag": "writing_hand"
+    },
+    {
+      "id": "reply-created",
+      "name": "Reply Created",
+      "summary": "Sent when someone replies to a thread you follow",
       "ntfyTag": "speech_balloon"
     }
   ],

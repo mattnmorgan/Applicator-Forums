@@ -102,10 +102,12 @@ export async function DELETE(
   try {
     const messages = context.recordManager("forums", "message");
     const threadAccess = context.recordManager("forums", "thread_access");
+    const threadSubs = context.recordManager("forums", "thread_subscription");
 
-    await context.withTransaction(async (client) => {
+    await context.withTransaction(async (client: any) => {
       await messages.deleteFilteredRecords({ fields: { threadId } }, { client });
       await threadAccess.deleteFilteredRecords({ fields: { threadId } }, { client });
+      await threadSubs.deleteFilteredRecords({ fields: { threadId } }, { client });
       await threads.deleteRecord(threadId, { client });
     });
 
